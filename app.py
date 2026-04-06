@@ -6,12 +6,7 @@ import json
 st.set_page_config(page_title="AI日语联想学习", layout="centered")
 
 # 2. 检查是否有 AI 钥匙 (API Key)
-# 这一步是为了确保安全性
-if "GROQ_API_KEY" in st.secrets:
-    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-else:
-    st.error("⚠️ 请在 Streamlit Secrets 中配置您的 GROQ_API_KEY")
-    st.stop()
+client = Groq(api_key="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")
 
 st.title("🇯🇵 日本語学習 - 智能联想系统")
 st.caption("基于 Llama3 驱动的 N5-N4 深度学习助手")
