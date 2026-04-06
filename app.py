@@ -37,7 +37,7 @@ if user_input:
             
             # 调用 AI
             completion = client.chat.completions.create(
-                model="llama3-8b-8192",
+                model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.5,
                 response_format={"type": "json_object"}
