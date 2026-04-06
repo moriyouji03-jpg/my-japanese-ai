@@ -4,19 +4,17 @@ import json
 from gtts import gTTS
 import io
 
-# 1. 核心配置：API 钥匙
+# 1. 基础配置
 API_KEY = "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"
 client = Groq(api_key=API_KEY)
 
-# 初始化 Session State，用于实现“排他性播放”逻辑
 if "playing_id" not in st.session_state:
     st.session_state.playing_id = None
 if "last_result" not in st.session_state:
     st.session_state.last_result = None
 
-# 定义发音生成器
 def get_audio(text):
-    if not text: return None
+    if not text or text == "None": return None
     try:
         tts = gTTS(text=text, lang='ja')
         fp = io.BytesIO()
@@ -24,69 +22,70 @@ def get_audio(text):
         fp.seek(0)
         return fp
     except: return None
-
-# 2. 页面美化
+        # 2. 界面与逻辑
 st.set_page_config(page_title="AI日语联想学习", layout="centered")
-st.title("JP 日本語学習 - 智能联想系统 3.1")
-st.caption("语义精准版 - 解决错误联想与排他播放")
-# 3. 交互与 AI 逻辑
+st.title("JP 日本語学習 - 智能联想系统 3.2")
+st.caption("强力纠错版 - 解决 None 报错与排他播放")
+
 user_input = st.text_input("📝 请输入中文单词或成语：", placeholder="例如：鸭")
 
-# 只有当输入变化时，才调用 AI，避免重复消耗额度
-if user_input and (not st.session_state.last_result or st.session_state.last_result['input'] != user_input):
-    with st.spinner('专家正在进行双语语义对齐，严防幻觉...'):
+if user_input and (not st.session_state.last_result or st.session_state.last_result.get('input') != user_input):
+    with st.spinner('专家正在进行最后一次逻辑校准...'):
         try:
-            # 强化指令：通过 System Message 和极低温度控制 AI 逻辑
-            prompt = f"请针对 '{user_input}' 联想一个准确的常用日语单词（严禁出错，如：鸭不可联想为鸡）。提供假名、数字音调及3个N5-N4水平例句。只输出格式正确的JSON。"
+            # 强化 Prompt：明确要求字段名，并给出一个空值填充逻辑
+            prompt = f"""
+            你是一位顶尖日语专家。请针对 '{user_input}' 返回 JSON。
+            必须包含这5个键，严禁改名：'word', 'reading', 'pitch', 'tip', 'sentences'。
+            'sentences' 必须是一个包含3个句子的列表。
+            示例：输入'秋' -> {{"word":"秋","reading":"あき","pitch":"[1]","tip":"注意开口","sentences":["秋ですね","红葉です","涼しい"]}}
+            """
             
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": "你是一个严谨的日语词典老师，只输出100%语义对齐的JSON。"},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1, # 极低随机性，确保不乱想
+                messages=[{"role": "system", "content": "你是一个严谨的机器人，只输出符合要求的JSON。"},
+                          {"role": "user", "content": prompt}],
+                temperature=0.1,
                 response_format={"type": "json_object"}
             )
             
-            res_data = json.loads(completion.choices[0].message.content)
-            res_data['input'] = user_input
-            st.session_state.last_result = res_data
-            st.session_state.playing_id = None # 换词时停止所有声音
-        except Exception as e:
-            st.error("❌ 逻辑模块波动，请尝试刷新。")
-            # 4. 界面渲染
+            raw_data = json.loads(completion.choices[0].message.content)
+            # 关键：手动赋能，防止 None 出现
+            st.session_state.last_result = {
+                "input": user_input,
+                "word": raw_data.get("word", "未获取"),
+                "reading": raw_data.get("reading", "未获取"),
+                "pitch": raw_data.get("pitch", "未知"),
+                "tip": raw_data.get("tip", raw_data.get("pronunciation_tip", "注意发音")),
+                "sentences": raw_data.get("sentences", ["生成失败", "生成失败", "生成失败"])
+            }
+            st.session_state.playing_id = None
+        except:
+            st.error("专家走神了，请按回车重试。")
+    # 3. 渲染
 if st.session_state.last_result:
     res = st.session_state.last_result
-    st.success(f"✨ 专家联想成功")
+    st.success("✨ 专家联想成功")
     
-    # 单词主内容
-    c_w1, c_w2 = st.columns([3, 1])
-    with c_w1:
-        st.header(f"{res.get('word')} ({res.get('reading')})")
-        st.write(f"**音调核：** {res.get('pitch')}")
-    with c_w2:
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        st.header(f"{res['word']} ({res['reading']})")
+        st.write(f"**音调核：** {res['pitch']}")
+    with c2:
         if st.button("🔊 单词发音", key="btn_word"):
             st.session_state.playing_id = "word"
-        
-        # 只有 ID 匹配时才渲染播放器并自动播放
         if st.session_state.playing_id == "word":
-            st.audio(get_audio(res.get('word')), format='audio/mp3', autoplay=True)
+            st.audio(get_audio(res['word']), format='audio/mp3', autoplay=True)
 
-    st.info(f"💡 专家建议：{res.get('tip', '注意发音细节')}")
+    st.info(f"💡 专家建议：{res['tip']}")
     st.divider()
     
-    # 例句分行展示
     st.subheader("📖 专家级例句练习")
-    sentences = res.get('sentences', [])
-    for idx, s in enumerate(sentences, 1):
+    for idx, s in enumerate(res['sentences'], 1):
         col_a, col_b = st.columns([0.7, 0.3])
         with col_a:
             st.write(f"**{idx}.** {s}")
         with col_b:
             if st.button(f"播放例句 {idx}", key=f"btn_{idx}"):
                 st.session_state.playing_id = f"sent_{idx}"
-            
-            # 排他性播放控制
             if st.session_state.playing_id == f"sent_{idx}":
-                st.audio(get_audio(s), format='audio/mp3', autoplay=True)
+                st.audio(get_audio(s), format='audio/mp3', autoplay=True)        
