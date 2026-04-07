@@ -4,69 +4,88 @@ import json
 from gtts import gTTS
 import io
 
-# 1. 核心配置
+# 1. 配置
 API_KEY = "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"
 client = Groq(api_key=API_KEY)
 
-# 2. 注入 FUSION 1.0 专属顶级 UI 样式
+# 2. 注入 FUSION 顶级科学 UI 样式 (参考截图1, 2)
 st.markdown("""
     <style>
-    .main { background-color: #f4f7fb; }
-    .fusion-title { color: #1E3A8A; font-family: 'Inter', sans-serif; font-weight: 800; font-size: 2.8rem; margin-bottom: 0px; }
-    .fusion-subtitle { color: #3B82F6; font-size: 1rem; letter-spacing: 2px; margin-bottom: 2rem; text-transform: uppercase; }
-    .info-card { background: white; padding: 25px; border-radius: 18px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); border-left: 6px solid #3B82F6; margin-bottom: 25px; }
-    .word-header { font-size: 2.2rem; font-weight: 700; color: #1e293b; }
-    .reading-text { font-size: 1.3rem; color: #64748b; font-weight: 400; margin-left: 10px; }
-    .tag-container { margin-top: 12px; display: flex; gap: 8px; }
-    .tag-blue { background: #dbeafe; color: #1e40af; padding: 4px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; }
-    .tag-red { background: #fee2e2; color: #991b1b; padding: 4px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; }
-    .sentence-box { background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 15px; transition: all 0.3s; }
-    .sentence-box:hover { border-color: #3B82F6; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1); }
+    /* 强制标题单行并美化 */
+    .fusion-banner {
+        white-space: nowrap;
+        color: #1E3A8A;
+        font-size: 2.2rem;
+        font-weight: 800;
+        padding-bottom: 10px;
+        border-bottom: 3px solid #3B82F6;
+        margin-bottom: 30px;
+        font-family: 'Inter', sans-serif;
+    }
+    /* 科学卡片布局 */
+    .info-card { 
+        background: white; 
+        padding: 25px; 
+        border-radius: 18px; 
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); 
+        border-left: 6px solid #3B82F6; 
+        margin-bottom: 25px; 
+    }
+    .index-circle {
+        background: #3B82F6;
+        color: white;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-right: 12px;
+        font-size: 0.9rem;
+    }
+    .kana-sub { background: #F3F4F6; color: #6B7280; padding: 3px 8px; border-radius: 5px; font-size: 0.85rem; }
+    /* 隐藏原生播放器，实现点击即播的清爽感 */
+    .stAudio { display: none; } 
     </style>
     """, unsafe_allow_html=True)
 
-if "playing_id" not in st.session_state:
-    st.session_state.playing_id = None
+# 初始化播放状态
+if "audio_config" not in st.session_state:
+    st.session_state.audio_config = {"text": None, "slow": False, "key": 0}
 if "last_result" not in st.session_state:
     st.session_state.last_result = None
 
-def get_audio(text):
+def get_audio(text, slow=False):
     if not text: return None
     try:
-        tts = gTTS(text=text, lang='ja')
+        tts = gTTS(text=text, lang='ja', slow=slow)
         fp = io.BytesIO()
         tts.write_to_fp(fp)
         fp.seek(0)
         return fp
     except: return None
-    # 3. 头部视觉展示
-st.markdown('<h1 class="fusion-title">FUSION</h1>', unsafe_allow_html=True)
-st.markdown('<p class="fusion-subtitle">智能化日语学习系统 1.0</p>', unsafe_allow_html=True)
+        # 3. 顶部单行标题
+st.markdown('<div class="fusion-banner">FUSION 智能化日语学习系统 1.0</div>', unsafe_allow_html=True)
 
-# 4. 搜索组件（参考截图3的蓝白风格）
+# 4. 搜索区 (参考截图3)
 col_s1, col_s2 = st.columns([4, 1])
 with col_s1:
-    user_input = st.text_input("Search", placeholder="请输入中文单词或成语，如：画蛇添足、工作、爱情", label_visibility="collapsed")
+    user_input = st.text_input("", placeholder="输入中文词，即刻开启专家级联想学习...", label_visibility="collapsed")
 with col_s2:
     search_btn = st.button("查询结果", type="primary", use_container_width=True)
 
-# 逻辑触发
+# 核心逻辑
 if (user_input or search_btn) and user_input:
     if not st.session_state.last_result or st.session_state.last_result.get('input') != user_input:
-        with st.spinner('FUSION Engine 正在检索标准日语词库...'):
+        with st.spinner('FUSION Engine 正在进行科学建模...'):
             prompt = f"""
-            针对 '{user_input}'，联想一个最贴切的日语词并生成3个例句。
+            你是一位顶尖日语教育专家。针对输入 '{user_input}'，联想一个最贴切的日语词并生成3个例句。
             必须严格输出JSON:
             {{
-                "word": "日文汉字词",
-                "reading": "平假名",
-                "pitch_symbol": "[数字]",
-                "pitch_type": "声调类型",
-                "pos": "词性",
-                "level": "JLPT级别",
-                "tip": "发音提醒",
+                "word": "汉字词", "reading": "假名", "pos": "词性", "level": "JLPT级别", "pitch": "[数字]",
                 "sentences": [
-                    {{"jp":"日语句子","kana":"全假名","cn":"中文翻译","en":"英文翻译"}}
+                    {{"jp":"原文","kana":"全假名","cn":"中文翻译","en":"English"}}
                 ]
             }}
             """
@@ -79,55 +98,59 @@ if (user_input or search_btn) and user_input:
             res_data = json.loads(completion.choices[0].message.content)
             res_data['input'] = user_input
             st.session_state.last_result = res_data
-            st.session_state.playing_id = None
-# 5. 结果渲染层
+            # 5. 结果渲染
 if st.session_state.last_result:
     res = st.session_state.last_result
     
+    # 衔接语
     st.markdown(f"#### 💡 これについて、以下の日本語が考えられます。")
 
-    # 单词卡片框架 (参考截图1)
-    st.markdown(f"""
-    <div class="info-card">
-        <div class="word-header">{res['word']}<span class="reading-text">（{res['reading']}）</span></div>
-        <div class="tag-container">
-            <span class="tag-blue">词性：{res['pos']}</span>
-            <span class="tag-blue">难度：{res['level']}</span>
-            <span class="tag-red">声调：{res['pitch_symbol']} {res['pitch_type']}</span>
-        </div>
-        <p style="margin-top:15px; color:#475569; font-style:italic;">💡 专家建议：{res['tip']}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # 主发音
-    ca1, ca2 = st.columns([1, 4])
-    with ca1:
-        if st.button("🔊 播放单词", key="main_voice"):
-            st.session_state.playing_id = "main"
-    with ca2:
-        if st.session_state.playing_id == "main":
-            st.audio(get_audio(res['word']), format="audio/mp3", autoplay=True)
+    # 单词卡片
+    with st.container():
+        c1, c2 = st.columns([0.75, 0.25])
+        with c1:
+            st.markdown(f"""
+            <div class="info-card">
+                <div style="font-size: 2.2rem; font-weight: 700;">{res['word']} <span style="font-size: 1.2rem; color: #64748b; font-weight: 400;">({res['reading']})</span></div>
+                <div style="margin-top: 10px; color: #3B82F6; font-weight: 600;">🏷️ {res['pos']} | {res['level']} | 声调: {res['pitch']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2 if 'col2' in locals() else c2: # 兼容处理
+            if st.button("🔊 播放单词", key="v_main", use_container_width=True):
+                st.session_state.audio_config = {"text": res['word'], "slow": False, "key": st.session_state.audio_config["key"]+1}
 
     st.divider()
 
-    # 造句层 (参考截图2)
-    st.subheader("📖 专家监修例句 (主谓宾结构)")
+    # 科学例句卡片层 (参考截图2)
+    st.subheader("参考文例 (3つの例文)")
     for idx, s in enumerate(res['sentences'], 1):
-        with st.container():
+        col_text, col_btn = st.columns([0.7, 0.3])
+        
+        with col_text:
             st.markdown(f"""
-            <div class="sentence-box">
-                <p style="font-size:1.2rem; color:#1e293b; font-weight:600; margin-bottom:5px;">{idx}. {s['jp']}</p>
-                <p style="color:#94a3b8; font-size:0.95rem; margin-bottom:12px;">{s['kana']}</p>
-                <p style="color:#059669; margin-bottom:4px;">🇨🇳 {s['cn']}</p>
-                <p style="color:#2563eb;">🇺🇸 {s['en']}</p>
+            <div style="display: flex; align-items: flex-start; margin-bottom: 25px;">
+                <div class="index-circle">{idx}</div>
+                <div>
+                    <div style="font-size: 1.25rem; font-weight: 600; color: #1E293B;">{s['jp']}</div>
+                    <div style="margin-top: 4px;"><span class="kana-sub">{s['kana']}</span></div>
+                    <div style="color: #059669; margin-top: 10px; border-left: 3px solid #E5E7EB; padding-left: 12px; font-size: 0.95rem;">{s['cn']}</div>
+                    <div style="color: #64748b; font-size: 0.85rem; padding-left: 15px;">{s['en']}</div>
+                </div>
             </div>
             """, unsafe_allow_html=True)
+
+        with col_btn:
+            # 双速按钮：参考截图2的绿/红配色
+            if st.button(f"🟢 普通の速さ", key=f"norm_{idx}", use_container_width=True):
+                st.session_state.audio_config = {"text": s['jp'], "slow": False, "key": st.session_state.audio_config["key"]+1}
             
-            # 例句发音
-            sa1, sa2 = st.columns([1, 4])
-            with sa1:
-                if st.button(f"🔊 朗读例句 {idx}", key=f"s_v_{idx}"):
-                    st.session_state.playing_id = f"sent_{idx}"
-            with sa2:
-                if st.session_state.playing_id == f"sent_{idx}":
-                    st.audio(get_audio(s['jp']), format="audio/mp3", autoplay=True)
+            if st.button(f"🔴 ゆっくり", key=f"slow_{idx}", use_container_width=True):
+                st.session_state.audio_config = {"text": s['jp'], "slow": True, "key": st.session_state.audio_config["key"]+1}
+
+    # 底部隐形播放触发器（核心：不产生视觉干扰）
+    if st.session_state.audio_config["text"]:
+        # 每次点击按钮，此处的 key 都会变化，强制重新加载音频实现点哪读哪
+        with st.empty():
+            audio_stream = get_audio(st.session_state.audio_config["text"], slow=st.session_state.audio_config["slow"])
+            if audio_stream:
+                st.audio(audio_stream, format="audio/mp3", autoplay=True)
