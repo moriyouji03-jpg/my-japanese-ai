@@ -4,13 +4,14 @@ import json
 from gtts import gTTS
 import io
 
-# 1. 核心配置与样式
+# 1. 核心配置
 API_KEY = "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"
 client = Groq(api_key=API_KEY)
 
+# 顶级美学样式：极致去框 + 3px粗边框色阶
 st.markdown("""<style>
     .header-container { display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid #1E3A8A; padding-bottom:10px; margin-bottom:20px; }
-    .fusion-banner { color:#1E3A8A; font-size:1.6rem; font-weight:800; }
+    .fusion-banner { color:#1E3A8A; font-size:1.5rem; font-weight:800; white-space:nowrap; }
     .word-box { background:white; padding:25px; border-radius:18px; box-shadow:0 8px 20px rgba(0,0,0,0.05); border:1px solid #E5E7EB; margin-bottom:20px; }
     .card-1 { background:#DBEafe; border:3px solid #3B82F6; padding:15px; border-radius:12px; margin-bottom:10px; }
     .card-2 { background:#EFF6FF; border:3px solid #60A5FA; padding:15px; border-radius:12px; margin-bottom:10px; }
@@ -30,15 +31,14 @@ def get_audio(text, slow=False):
         return fp
     except: return None
 
-# 2. 头部视觉 (更新标题：FUSION 智能化日语学习助手 1.0)
+# 2. 头部视觉 (和服少女👘)
 st.markdown('<div class="header-container"><div class="fusion-banner">FUSION 智能化日语学习助手 1.0（对象N4, N5）</div><div style="font-size:35px;">👘</div></div>', unsafe_allow_html=True)
 
-# 搜索组件
 c1, c2 = st.columns([4, 1])
 with c1: user_input = st.text_input("", placeholder="输入中文词，开启专业日语联想...", label_visibility="collapsed")
 with c2: search_btn = st.button("查询", type="primary", use_container_width=True)
 
-# 初始界面逻辑
+# 初始界面
 target = user_input
 if not st.session_state.last_result and not user_input:
     st.info("🌸 你好，我是FUSION 智能语言小助手，请多多关照。")
@@ -46,24 +46,32 @@ if not st.session_state.last_result and not user_input:
 
 if target:
     if not st.session_state.last_result or st.session_state.last_result.get('input') != target:
-        with st.spinner('检索中...'):
+        with st.spinner('FUSION 字典引擎检索中...'):
             try:
-                p = f"Translate '{target}' to Japanese. Hallucination forbidden. Return JSON: {{'word':'Kanji','reading':'Kana','pos':'part','level':'N4/N5','pitch':'0','sentences':[{{'jp':'S1','kana':'K1','cn':'C1','en':'E1'}},{{'jp':'S2','kana':'K2','cn':'C2','en':'E2'}},{{'jp':'S3','kana':'K3','cn':'C3','en':'E3'}}]}}"
+                # 使用中文指令锁死语义，严禁“鸭子变鸡”
+                prompt = f"""你是日语专家。请翻译中文词: "{target}"。
+                要求: 语义必须绝对准确(鸭子=アヒル, 绝非鸡), 必须正好3个例句。
+                输出JSON: {{'word':'汉字','reading':'假名','pos':'词性','level':'N4/N5','pitch':'0','sentences':[{{'jp':'日','kana':'假','cn':'中','en':'EN'}}]}}"""
+                
                 comp = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
-                    messages=[{"role":"system","content":"Professional Japanese teacher for N4/N5 level. Accuracy is vital. Provide 3 sentences."}, {"role":"user","content":p}],
-                    temperature=0, response_format={"type":"json_object"}
+                    messages=[
+                        {"role": "system", "content": "你是一本严谨的词典。严禁幻觉。鸭子必须翻译为アヒル。"},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0, response_format={"type": "json_object"}
                 )
                 res = json.loads(comp.choices[0].message.content)
                 res['input'] = target
                 st.session_state.last_result = res
                 if user_input: st.session_state.audio_config = {"text":"これについて、以下の日本語が考えられます。","slow":False,"key":999}
-            except: st.error("连接异常")
+            except: st.error("引擎请求波动，请重试")
 
-# 3. 动态渲染
+# 3. 结果渲染 (物理去框)
 if st.session_state.last_result:
     r = st.session_state.last_result
     st.markdown("#### 💡 これについて、以下の日本語が考えられます。")
+    
     wd = r.get('word','').strip()
     if wd and wd != "()":
         st.markdown(f'<div class="word-box"><h2 style="margin:0;color:#1E3A8A;">{wd} ({r.get("reading","")})</h2><div style="color:#3B82F6;">🏷️ {r.get("pos","")} | {r.get("level","")} | 声调:{r.get("pitch","")}</div></div>', unsafe_allow_html=True)
@@ -75,13 +83,14 @@ if st.session_state.last_result:
         st.markdown("<h3 style='color:#1E3A8A;margin-top:20px;'>参考文例 (3つの例文)</h3>", unsafe_allow_html=True)
         for i in range(min(len(sents), 3)):
             s = sents[i]
-            st.markdown(f'<div class="card-{i+1}"><div style="display:flex;"><div class="idx">{i+1}</div><div style="flex:1;"><div style="font-size:1.1rem;font-weight:bold;">{s.get("jp","")}</div><div style="color:#666;font-size:0.85rem;">{s.get("kana","")}</div><div style="color:#059669;font-weight:500;">🇨🇳 {s.get("cn","")}</div><div style="color:#2563EB;font-size:0.8rem;">🇺🇸 {s.get('en','')}</div></div></div></div>', unsafe_allow_html=True)
-            cols = st.columns([1, 1])
-            if cols[0].button(f"🟢 标准速", key=f"n_{i}", use_container_width=True):
-                st.session_state.audio_config = {"text":s.get("jp"),"slow":False,"key":st.session_state.audio_config["key"]+1}
-            if cols[1].button(f"🔴 慢速", key=f"s_{i}", use_container_width=True):
-                st.session_state.audio_config = {"text":s.get("jp"),"slow":True,"key":st.session_state.audio_config["key"]+1}
+            st.markdown(f'<div class="card-{i+1}"><div style="display:flex;"><div class="idx">{i+1}</div><div style="flex:1;"><div style="font-size:1.1rem;font-weight:bold;">{s.get("jp","")}</div><div style="color:#666;font-size:0.85rem;">{s.get("kana","")}</div><div style="color:#059669;font-weight:500;">🇨🇳 {s.get("cn","")}</div><div style="color:#2563EB;font-size:0.8rem;">🇺🇸 {s.get("en","")}</div></div></div></div>', unsafe_allow_html=True)
+            ca, cb = st.columns([1, 1])
+            with ca: 
+                if st.button(f"🟢 标准速", key=f"n_{i}", use_container_width=True): st.session_state.audio_config = {"text":s.get("jp"),"slow":False,"key":st.session_state.audio_config["key"]+1}
+            with cb:
+                if st.button(f"🔴 慢速", key=f"s_{i}", use_container_width=True): st.session_state.audio_config = {"text":s.get("jp"),"slow":True,"key":st.session_state.audio_config["key"]+1}
 
+# 4. 全局发音执行
 if st.session_state.audio_config["text"]:
     aud = get_audio(st.session_state.audio_config["text"], st.session_state.audio_config["slow"])
     if aud: st.audio(aud, format="audio/mp3", autoplay=True)
