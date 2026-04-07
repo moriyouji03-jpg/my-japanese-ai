@@ -25,7 +25,6 @@ st.markdown("""
         border: 1px solid #E5E7EB; margin-bottom: 25px; 
     }
     /* 例句卡片：色阶渐变与 3px 粗边框 */
-    .example-container { padding: 25px; border-radius: 15px; background-color: #FAFAFA; border: 1px solid #F3F4F6; }
     .card-1 { background-color: #DBEafe; border: 3px solid #3B82F6; padding: 20px; border-radius: 12px; margin-bottom: 15px; }
     .card-2 { background-color: #EFF6FF; border: 3px solid #60A5FA; padding: 20px; border-radius: 12px; margin-bottom: 15px; }
     .card-3 { background-color: #F8FAFC; border: 3px solid #93C5FD; padding: 20px; border-radius: 12px; margin-bottom: 15px; }
