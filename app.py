@@ -18,11 +18,11 @@ st.markdown("""
     .fusion-banner {
         white-space: nowrap; color: #1E3A8A; font-size: 2.2rem; font-weight: 800;
     }
-    /* 核心单词区：纯净悬浮卡片 (去除多余蓝框) */
+    /* 核心单词区：纯净悬浮卡片 (去除了所有多余蓝框) */
     .word-box { 
         background: white; padding: 30px; border-radius: 20px; 
         box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); 
-        border: 1px solid #E5E7EB; margin-bottom: 30px; 
+        border: 1px solid #E5E7EB; margin-bottom: 25px; 
     }
     /* 例句卡片：色阶渐变与 3px 粗边框 */
     .example-container { padding: 25px; border-radius: 15px; background-color: #FAFAFA; border: 1px solid #F3F4F6; }
@@ -54,7 +54,7 @@ def get_audio(text, slow=False):
         fp.seek(0)
         return fp
     except: return None
-        # 3. 头部视觉 (和服少女图标替换富士山)
+        # 3. 头部视觉 (和服少女图标 👘)
 st.markdown('<div class="header-container"><div class="fusion-banner">FUSION 智能化日语学习系统 1.0</div><div style="font-size: 40px;">👘</div></div>', unsafe_allow_html=True)
 
 # 4. 搜索组件
@@ -68,18 +68,18 @@ if (user_input or search_btn) and user_input:
     if not st.session_state.last_result or st.session_state.last_result.get('input') != user_input:
         with st.spinner('和服萌娘正在为您构思...'):
             try:
-                # 强化 Prompt：确保翻译精准且返回中英日三语
-                prompt = f"针对 '{user_input}'，联想一个日语词并生成3个例句。JSON内容包含: word, reading, pos, level, pitch, sentences(jp, kana, cn, en)。"
+                # 强化 Prompt：确保翻译精准且返回中英日三语，纠正语义错误
+                prompt = f"针对 '{user_input}'，联想一个日语词并生成3个例句。JSON内容包含: word, reading, pos, level, pitch, sentences(jp, kana, cn, en)。严禁语义错误。"
                 completion = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.2,
+                    temperature=0.1, # 极低温度确保严谨
                     response_format={"type": "json_object"}
                 )
                 res_data = json.loads(completion.choices[0].message.content)
                 res_data['input'] = user_input
                 st.session_state.last_result = res_data
-                # 【关键】触发自动朗读衔接语
+                # 触发自动朗读衔接语
                 st.session_state.audio_config = {"text": "これについて、以下の日本語が考えられます。", "slow": False, "key": 999}
             except: st.error("连接超时，请重试")
                 # 5. 结果渲染
@@ -87,11 +87,10 @@ if st.session_state.last_result:
     res = st.session_state.last_result
     st.markdown(f"#### 💡 これについて、以下の日本語が考えられます。")
 
-    # 核心单词区 (纯净卡片，去除多余蓝框)
+    # 核心单词区 (纯白悬浮卡片)
     st.markdown('<div class="word-box">', unsafe_allow_html=True)
     c1, c2 = st.columns([0.7, 0.3])
     with c1:
-        # 强制朗读日语词
         st.markdown(f"<h1 style='color:#1E3A8A; margin:0;'>{res['word']}</h1>", unsafe_allow_html=True)
         st.markdown(f"<p style='font-size:1.4rem; color:#475569;'>（{res['reading']}）</p>", unsafe_allow_html=True)
         st.markdown(f"<span style='color:#3B82F6; font-weight:bold;'>🏷️ {res.get('pos','词')} | {res.get('level','N2')} | 声调: {res.get('pitch','[0]')}</span>", unsafe_allow_html=True)
@@ -101,7 +100,7 @@ if st.session_state.last_result:
             st.session_state.audio_config = {"text": res['word'], "slow": False, "key": st.session_state.audio_config["key"]+1}
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 色阶例句卡片 (深蓝、蓝、浅蓝渐变)
+    # 色阶例句卡片 (深、中、浅蓝渐变)
     st.markdown('<div class="example-container">', unsafe_allow_html=True)
     st.markdown("<h3 style='color:#1E3A8A; margin-top:0;'>参考文例 (3つの例文)</h3>", unsafe_allow_html=True)
     for idx, s in enumerate(res['sentences'], 1):
@@ -127,7 +126,7 @@ if st.session_state.last_result:
                 st.session_state.audio_config = {"text": s['jp'], "slow": True, "key": st.session_state.audio_config["key"]+1}
     st.markdown('</div>', unsafe_allow_html=True)
 
-# 6. 隐形发音组件 (支持自动播放逻辑)
+# 6. 隐形发音组件
 if st.session_state.audio_config["text"]:
     with st.empty():
         aud = get_audio(st.session_state.audio_config["text"], slow=st.session_state.audio_config["slow"])
