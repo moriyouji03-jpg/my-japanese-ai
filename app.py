@@ -5,7 +5,7 @@ from gtts import gTTS
 import io
 import time
 
-# 1. 核心安全配置：从 Streamlit Secrets 动态读取加密秘钥
+# 1. 核心安全配置：从 Secrets 动态读取加密秘钥
 try:
     if "GROQ_API_KEY" in st.secrets:
         current_api_key = st.secrets["GROQ_API_KEY"]
@@ -14,11 +14,11 @@ try:
         st.error("🔑 秘钥未配置：请在 Streamlit 控制台的 Secrets 中添加 GROQ_API_KEY。")
         st.stop()
 except Exception:
-    st.error("🔑 秘钥读取异常，请确认 Secrets 配置是否正确。")
+    st.error("🔑 秘钥读取异常，请确认 Secrets 配置。")
     st.stop()
 
-# 定义冗余模型，应对不同模型的瞬时频率限制
-MODELS = ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"]
+# 定义冗余模型列表，用于自动切换避开频率限制
+MODELS = ["llama-3.3-70b-versatile", "mixtral-8x7b-32768", "llama-3.1-70b-versatile"]
 
 st.set_page_config(page_title="FUSION 日语助手", layout="centered", page_icon="👘")
 
@@ -50,35 +50,41 @@ c1, c2 = st.columns([4, 1])
 user_input = c1.text_input("", placeholder="输入中文词，获取顶流水平教案...", label_visibility="collapsed")
 search_btn = c2.button("查询", type="primary", use_container_width=True)
 
-# 4. 稳健检索与 3 例句生成逻辑
-if search_btn and user_input:
-    st.session_state.last_result = None 
-    with st.spinner('FUSION 顶流教案生成中...'):
-        # 严格约束：锁死语义、强制 3 句、N4/N5 级别
-        prompt = "Identify the most NATURAL Japanese for: '" + user_input + "'. "
-        prompt += "CRITICAL RULES: 1. MUST provide EXACTLY 3 examples (N4/N5 level). "
-        prompt += "2. If '狐狸'->'狐(きつね)', If '大家'->'皆さん'. 3. Avoid direct Hanzi-matching. "
-        prompt += "Return JSON: {\"word\":\"\", \"reading\":\"\", \"pos\":\"\", \"level\":\"N4/N5\", \"pitch\":\"0\", \"sentences\":[{\"jp\":\"\", \"kana\":\"\", \"cn\":\"\"}, {\"jp\":\"\", \"kana\":\"\", \"cn\":\"\"}, {\"jp\":\"\", \"kana\":\"\", \"cn\":\"\"}]}"
-        
-        success = False
-        for m in MODELS:
-            try:
-                comp = client.chat.completions.create(
-                    model=m,
-                    messages=[{"role": "system", "content": "Professional Japanese Teacher. Accuracy is priority."}, {"role": "user", "content": prompt}],
-                    temperature=0, response_format={"type": "json_object"}
-                )
-                res = json.loads(comp.choices[0].message.content)
-                res['input_key'] = user_input
-                st.session_state.last_result = res
-                success = True
-                break
-            except Exception:
-                time.sleep(1) # 容错避让
-                continue
-        
-        if not success:
-            st.warning("👘 访问频率触达上限，请稍微等待 10 秒后再次尝试。")
+# 4. 稳健检索与多级重试逻辑
+if (search_btn or (user_input and not st.session_state.last_result)) and user_input:
+    # 只有当输入变化时才重置结果
+    if st.session_state.last_result and st.session_state.last_result.get('input_key') != user_input:
+        st.session_state.last_result = None
+    
+    if not st.session_state.last_result:
+        with st.spinner('FUSION 顶流教案生成中...'):
+            prompt = "Identify the most NATURAL Japanese for: '" + user_input + "'. "
+            prompt += "Rules: N4/N5 only. If '狐狸'->'狐(きつね)'. MUST 3 examples. "
+            prompt += "Return JSON: {\"word\":\"\", \"reading\":\"\", \"pos\":\"\", \"level\":\"N4/N5\", \"pitch\":\"0\", \"sentences\":[{\"jp\":\"\", \"kana\":\"\", \"cn\":\"\"}, {\"jp\":\"\", \"kana\":\"\", \"cn\":\"\"}, {\"jp\":\"\", \"kana\":\"\", \"cn\":\"\"}]}"
+            
+            final_res = None
+            # 核心抗压机制：多模型 + 静默等待重试
+            for m in MODELS:
+                if final_res: break
+                for attempt in range(2): # 每个模型尝试2次
+                    try:
+                        comp = client.chat.completions.create(
+                            model=m,
+                            messages=[{"role": "system", "content": "Professional Japanese Teacher."}, {"role": "user", "content": prompt}],
+                            temperature=0, response_format={"type": "json_object"}
+                        )
+                        final_res = json.loads(comp.choices[0].message.content)
+                        final_res['input_key'] = user_input
+                        break
+                    except Exception as e:
+                        if "rate_limit" in str(e).lower():
+                            time.sleep(2) # 遇到限制静默等待2秒
+                        continue
+            
+            if final_res:
+                st.session_state.last_result = final_res
+            else:
+                st.warning("👘 访问频率触达上限。建议：请等待 10 秒后再次尝试查询。")
 
 # 5. 渲染结果
 if st.session_state.last_result and st.session_state.last_result.get('input_key') == user_input:
