@@ -38,7 +38,7 @@ c1, c2 = st.columns([4, 1])
 user_input = c1.text_input("", placeholder="输入中文词，开启专业日语联想...", label_visibility="collapsed")
 search_btn = c2.button("查询", type="primary", use_container_width=True)
 
-# 默认欢迎状态
+# 默认状态
 target = user_input
 if not st.session_state.last_result and not user_input:
     st.info("🌸 你好，我是FUSION 智能助手。请输入想学习的中文词，我会为您生成专业教案。")
@@ -47,13 +47,13 @@ if not st.session_state.last_result and not user_input:
 if target:
     if not st.session_state.last_result or st.session_state.last_result.get('input') != target:
         with st.spinner('FUSION 语义校对中...'):
-            # 【重要】语义修正指令：彻底修复狐狸/大家等错误
-            prompt = f"""Identify the most NATURAL Japanese for: "{target}".
-            ANTI-HALLUCINATION RULES:
-            1. If input is '狐狸', output '狐 (きつね)', NOT '狐狸'.
-            2. If input is '大家', output '皆さん (みなさん)', NOT '大家'.
-            3. Prioritize N4/N5 native expressions and Kun-yomi.
-            Return JSON only: {{"word":"", "reading":"", "pos":"", "level":"N4/N5", "pitch":"0", "sentences":[{"jp":"","kana":"","cn":"","en":""}]}}"""
+            # 采用更稳健的 Prompt 拼接方式，避免 ValueError
+            prompt = "Identify the most NATURAL Japanese for: '" + target + "'.\n"
+            prompt += "ANTI-HALLUCINATION RULES:\n"
+            prompt += "1. If input is '狐狸', output '狐 (きつね)', NOT '狐狸'.\n"
+            prompt += "2. If input is '大家', output '皆さん (みなさん)', NOT '大家'.\n"
+            prompt += "3. Prioritize N4/N5 native expressions and Kun-yomi.\n"
+            prompt += "Return JSON only: {\"word\":\"\", \"reading\":\"\", \"pos\":\"\", \"level\":\"N4/N5\", \"pitch\":\"0\", \"sentences\":[{\"jp\":\"\", \"kana\":\"\", \"cn\":\"\", \"en\":\"\"}]}"
             
             try:
                 comp = client.chat.completions.create(
@@ -65,7 +65,7 @@ if target:
                 res['input'] = target
                 st.session_state.last_result = res
             except Exception:
-                st.error("👘 引擎请求繁忙，请重试。")
+                st.error("👘 引擎请求繁忙，请刷新页面重试。")
 
 # 3. 结果渲染
 if st.session_state.last_result:
