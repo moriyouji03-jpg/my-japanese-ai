@@ -3,8 +3,9 @@ from groq import Groq
 import json
 from gtts import gTTS
 import io
+import time
 
-# 1. 核心配置与美学样式
+# 1. 核心配置
 API_KEY = "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"
 client = Groq(api_key=API_KEY)
 
@@ -31,48 +32,48 @@ def get_audio(text, slow=False):
         return fp
     except: return None
 
-# 2. 界面头部 (和服少女👘)
+# 2. 界面头部
 st.markdown('<div class="main-header"><div class="fusion-title">FUSION 智能化日语学习助手 1.0</div><div style="font-size:35px;">👘</div></div>', unsafe_allow_html=True)
 
 c1, c2 = st.columns([4, 1])
 user_input = c1.text_input("", placeholder="输入中文词，开启专业日语联想...", label_visibility="collapsed")
 search_btn = c2.button("查询", type="primary", use_container_width=True)
 
-# 默认状态
-target = user_input
 if not st.session_state.last_result and not user_input:
-    st.info("🌸 你好，我是FUSION 智能助手。请输入想学习的中文词，我会为您生成专业教案。")
-    target = "你好"
+    st.info("🌸 你好，我是FUSION 智能助手。请输入想学习的中文词。")
 
-if target:
-    if not st.session_state.last_result or st.session_state.last_result.get('input') != target:
-        with st.spinner('FUSION 语义校对中...'):
-            # 采用更稳健的 Prompt 拼接方式，避免 ValueError
-            prompt = "Identify the most NATURAL Japanese for: '" + target + "'.\n"
-            prompt += "ANTI-HALLUCINATION RULES:\n"
-            prompt += "1. If input is '狐狸', output '狐 (きつね)', NOT '狐狸'.\n"
-            prompt += "2. If input is '大家', output '皆さん (みなさん)', NOT '大家'.\n"
-            prompt += "3. Prioritize N4/N5 native expressions and Kun-yomi.\n"
-            prompt += "Return JSON only: {\"word\":\"\", \"reading\":\"\", \"pos\":\"\", \"level\":\"N4/N5\", \"pitch\":\"0\", \"sentences\":[{\"jp\":\"\", \"kana\":\"\", \"cn\":\"\", \"en\":\"\"}]}"
-            
+if user_input and (not st.session_state.last_result or st.session_state.last_result.get('input') != user_input):
+    with st.spinner('FUSION 语义校对中...'):
+        # 构造稳健的 Prompt
+        prompt = "Translate '" + user_input + "' to natural Japanese. "
+        prompt += "Rules: If '狐狸'->'狐(きつね)', If '大家'->'皆さん'. Use N4/N5 level. "
+        prompt += "JSON: {\"word\":\"\", \"reading\":\"\", \"pos\":\"\", \"level\":\"N4/N5\", \"pitch\":\"0\", \"sentences\":[{\"jp\":\"\", \"kana\":\"\", \"cn\":\"\", \"en\":\"\"}]}"
+        
+        success = False
+        for attempt in range(3): # 增加 3 次自动重试机制
             try:
                 comp = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
-                    messages=[{"role": "system", "content": "You are a professional Japanese teacher. Avoid Chinese-style Japanese."}, {"role": "user", "content": prompt}],
+                    messages=[{"role": "system", "content": "Professional Japanese Teacher."}, {"role": "user", "content": prompt}],
                     temperature=0, response_format={"type": "json_object"}
                 )
                 res = json.loads(comp.choices[0].message.content)
-                res['input'] = target
+                res['input'] = user_input
                 st.session_state.last_result = res
-            except Exception:
-                st.error("👘 引擎请求繁忙，请刷新页面重试。")
+                success = True
+                break
+            except Exception as e:
+                time.sleep(1) # 遇到繁忙时等待 1 秒再试
+        
+        if not success:
+            st.error("👘 引擎请求繁忙，请稍微等待 5 秒后再次点击查询。")
 
-# 3. 结果渲染
-if st.session_state.last_result:
+# 3. 结果渲染 (只有当输入匹配时才显示结果)
+if st.session_state.last_result and st.session_state.last_result.get('input') == user_input:
     r = st.session_state.last_result
     st.markdown("#### 💡 联想结果：")
     
-    if r.get('word') and r['word'] != "()":
+    if r.get('word'):
         st.markdown(f'<div class="word-box"><h2 style="margin:0;color:#1E3A8A;">{r["word"]} ({r.get("reading","")})</h2><div style="color:#3B82F6;">🏷️ {r.get("pos","")} | {r.get("level","")} | 声调:{r.get("pitch","")}</div></div>', unsafe_allow_html=True)
         if st.button("🔊 播放单词音", key="v_main", use_container_width=True):
             st.session_state.audio_config = {"text":r["word"],"slow":False,"key":st.session_state.audio_config["key"]+1}
