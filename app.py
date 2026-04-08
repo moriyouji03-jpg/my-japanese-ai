@@ -29,7 +29,7 @@ def get_fusion_pro(user_input):
     g_key = g_keys[0] if g_keys else None
     o_key = st.secrets.get("OPENAI_API_KEY")
 
-    # 策略 A：Groq 高速尝试（缩短超时时间以提高整体响应感）
+    # 策略 A：Groq 高速尝试
     if g_key:
         try:
             client = Groq(api_key=g_key)
@@ -38,11 +38,11 @@ def get_fusion_pro(user_input):
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,
                 response_format={"type": "json_object"},
-                timeout=6.0  # 6秒不回立刻切保险，不让用户久等
+                timeout=6.0 
             )
             return json.loads(comp.choices[0].message.content)
         except:
-            pass # 静默进入 B 计划
+            pass 
 
     # 策略 B：OpenAI 商业级稳定防线
     if o_key:
@@ -79,7 +79,8 @@ query = st.text_input("", placeholder="输入词汇 (例如：鸭)...", label_vi
 
 if st.button("查询", type="primary", use_container_width=True) and query:
     with st.spinner('FUSION 引擎正在智能检索中...'):
-        res = get_pro_response(query)
+        # 修正：此处函数名已与上方定义保持一致
+        res = get_fusion_pro(query)
         if res:
             res['q'] = query
             st.session_state.last_res = res
@@ -90,7 +91,6 @@ if st.session_state.last_res and st.session_state.last_res.get('q') == query:
     # 引导语回归
     st.markdown('<p class="guide-text">これをみると、以下の日本語が考えられます：</p>', unsafe_allow_html=True)
     
-    # 核心展示：汉字 + 假名 + 訓読み优先效果
     st.markdown(f"""
     <div class="word-box">
         <h1 style="margin:0;color:#1E3A8A;font-size:2.8rem;">{r.get('word')}</h1>
