@@ -1,38 +1,32 @@
 import streamlit as st
 from groq import Groq
+from openai import OpenAI
 import json
 from gtts import gTTS
 import io
 import time
 
-# 1. 核心安全配置：从 Secrets 动态读取加密秘钥
-try:
+# 1. 引擎初始化
+def init_clients():
+    g_client, o_client = None, None
     if "GROQ_API_KEY" in st.secrets:
-        current_api_key = st.secrets["GROQ_API_KEY"]
-        client = Groq(api_key=current_api_key)
-    else:
-        st.error("🔑 秘钥未配置：请在 Streamlit 控制台的 Secrets 中添加 GROQ_API_KEY。")
-        st.stop()
-except Exception:
-    st.error("🔑 秘钥读取异常，请确认 Secrets 配置。")
-    st.stop()
+        g_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+    if "OPENAI_API_KEY" in st.secrets:
+        o_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    return g_client, o_client
 
-# 定义冗余模型列表，用于自动切换避开频率限制
-MODELS = ["llama-3.3-70b-versatile", "mixtral-8x7b-32768", "llama-3.1-70b-versatile"]
+groq_client, openai_client = init_clients()
 
-st.set_page_config(page_title="FUSION 日语助手", layout="centered", page_icon="👘")
+st.set_page_config(page_title="FUSION 日语助手 Pro", layout="centered", page_icon="👘")
 
-# 2. FUSION 顶级美学样式表
 st.markdown("""<style>
-    .main-header { display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid #1E3A8A; padding-bottom:10px; margin-bottom:20px; }
-    .fusion-title { color:#1E3A8A; font-size:1.6rem; font-weight:800; }
+    .main-header { border-bottom:3px solid #1E3A8A; padding-bottom:10px; margin-bottom:20px; }
     .word-box { background:white; padding:25px; border-radius:18px; box-shadow:0 8px 20px rgba(0,0,0,0.05); border:1px solid #E5E7EB; margin-bottom:25px; }
     .card-item { border:2px solid #3B82F6; padding:18px; border-radius:12px; margin-bottom:12px; background:#F8FAFC; }
-    .idx { background:#1E3A8A; color:white; width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-weight:bold; margin-right:8px; font-size:12px; vertical-align:middle; }
+    .idx { background:#1E3A8A; color:white; width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-weight:bold; margin-right:8px; font-size:12px; }
     .stAudio { display:none; }
 </style>""", unsafe_allow_html=True)
 
-# 状态管理
 if "audio_config" not in st.session_state: st.session_state.audio_config = {"text": None, "slow": False, "key": 0}
 if "last_result" not in st.session_state: st.session_state.last_result = None
 
@@ -43,71 +37,64 @@ def get_audio(text, slow=False):
         return fp
     except: return None
 
-# 3. 界面展示
-st.markdown('<div class="main-header"><div class="fusion-title">FUSION 智能化日语学习助手 1.0</div><div style="font-size:35px;">👘</div></div>', unsafe_allow_html=True)
+# 2. 界面展示
+st.markdown('<div class="main-header"><h1 style="color:#1E3A8A;font-size:1.6rem;">👘 FUSION 智能化日语学习助手 Pro</h1></div>', unsafe_allow_html=True)
 
 c1, c2 = st.columns([4, 1])
-user_input = c1.text_input("", placeholder="输入中文词，获取顶流水平教案...", label_visibility="collapsed")
+user_input = c1.text_input("", placeholder="输入中文词，获取双引擎保障教案...", label_visibility="collapsed")
 search_btn = c2.button("查询", type="primary", use_container_width=True)
 
-# 4. 稳健检索与多级重试逻辑
-if (search_btn or (user_input and not st.session_state.last_result)) and user_input:
-    # 只有当输入变化时才重置结果
-    if st.session_state.last_result and st.session_state.last_result.get('input_key') != user_input:
-        st.session_state.last_result = None
-    
-    if not st.session_state.last_result:
-        with st.spinner('FUSION 顶流教案生成中...'):
-            prompt = "Identify the most NATURAL Japanese for: '" + user_input + "'. "
-            prompt += "Rules: N4/N5 only. If '狐狸'->'狐(きつね)'. MUST 3 examples. "
-            prompt += "Return JSON: {\"word\":\"\", \"reading\":\"\", \"pos\":\"\", \"level\":\"N4/N5\", \"pitch\":\"0\", \"sentences\":[{\"jp\":\"\", \"kana\":\"\", \"cn\":\"\"}, {\"jp\":\"\", \"kana\":\"\", \"cn\":\"\"}, {\"jp\":\"\", \"kana\":\"\", \"cn\":\"\"}]}"
-            
-            final_res = None
-            # 核心抗压机制：多模型 + 静默等待重试
-            for m in MODELS:
-                if final_res: break
-                for attempt in range(2): # 每个模型尝试2次
-                    try:
-                        comp = client.chat.completions.create(
-                            model=m,
-                            messages=[{"role": "system", "content": "Professional Japanese Teacher."}, {"role": "user", "content": prompt}],
-                            temperature=0, response_format={"type": "json_object"}
-                        )
-                        final_res = json.loads(comp.choices[0].message.content)
-                        final_res['input_key'] = user_input
-                        break
-                    except Exception as e:
-                        if "rate_limit" in str(e).lower():
-                            time.sleep(2) # 遇到限制静默等待2秒
-                        continue
-            
-            if final_res:
-                st.session_state.last_result = final_res
-            else:
-                st.warning("👘 访问频率触达上限。建议：请等待 10 秒后再次尝试查询。")
+# 3. 核心：静默熔断逻辑 (不报黄框，直接切换)
+if search_btn and user_input:
+    st.session_state.last_result = None 
+    with st.spinner('FUSION 智能引擎正在调度最优路径...'):
+        prompt = f"Japanese for '{user_input}'. N4/N5 level. 3 Examples. JSON: {{\"word\":\"\", \"reading\":\"\", \"pos\":\"\", \"level\":\"N4/N5\", \"pitch\":\"0\", \"sentences\":[{{\"jp\":\"\", \"kana\":\"\", \"cn\":\"\"}},{{\"jp\":\"\", \"kana\":\"\", \"cn\":\"\"}},{{\"jp\":\"\", \"kana\":\"\", \"cn\":\"\"}}]}}"
+        
+        final_res = None
+        
+        # 尝试 A：Groq (静默尝试)
+        if groq_client:
+            try:
+                comp = groq_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0, response_format={"type": "json_object"}
+                )
+                final_res = json.loads(comp.choices[0].message.content)
+            except Exception:
+                pass # 悄悄失败，不报错
 
-# 5. 渲染结果
+        # 尝试 B：OpenAI (如果 A 没结果，立刻顶上)
+        if not final_res and openai_client:
+            try:
+                comp = openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format={"type": "json_object"}
+                )
+                final_res = json.loads(comp.choices[0].message.content)
+            except Exception as e:
+                st.error(f"OpenAI 引擎报错: {e}")
+
+        if final_res:
+            final_res['input_key'] = user_input
+            st.session_state.last_result = final_res
+        else:
+            st.warning("👘 当前所有教学线路繁忙，请等待 10 秒后再次查询。")
+
+# 4. 渲染
 if st.session_state.last_result and st.session_state.last_result.get('input_key') == user_input:
     r = st.session_state.last_result
-    st.markdown("#### 💡 联想结果：")
-    
-    if r.get('word'):
-        st.markdown(f'<div class="word-box"><h2 style="margin:0;color:#1E3A8A;">{r["word"]} ({r.get("reading","")})</h2><div style="color:#3B82F6;">🏷️ {r.get("pos","")} | {r.get("level","")} | 声调:{r.get("pitch","")}</div></div>', unsafe_allow_html=True)
-        if st.button("🔊 播放单词音", key="v_main", use_container_width=True):
-            st.session_state.audio_config = {"text":r["word"],"slow":False,"key":st.session_state.audio_config["key"]+1}
+    st.markdown(f'<div class="word-box"><h2 style="margin:0;color:#1E3A8A;">{r.get("word")} ({r.get("reading")})</h2><p style="color:#3B82F6;">🏷️ {r.get("pos")} | {r.get("level")} | 声调:{r.get("pitch")}</p></div>', unsafe_allow_html=True)
+    if st.button("🔊 播放单词音", key="v_main", use_container_width=True):
+        st.session_state.audio_config = {"text":r["word"],"slow":False,"key":st.session_state.audio_config["key"]+1}
 
-    sents = r.get('sentences', [])
-    if sents:
-        st.markdown("<h3 style='color:#1E3A8A;margin-top:10px;'>参考文例 (3个)</h3>", unsafe_allow_html=True)
-        for i, s in enumerate(sents, 1):
-            st.markdown(f'<div class="card-item"><div><b><span class="idx">{i}</span>{s.get("jp","")}</b><br><span style="font-size:0.85rem;color:#64748B;margin-left:30px;">{s.get("kana","")}</span><br><span style="color:#059669;margin-left:30px;">🇨🇳 {s.get("cn","")}</span></div></div>', unsafe_allow_html=True)
-            ca, cb = st.columns(2)
-            if ca.button(f"🟢 标准速 {i}", key=f"n_{i}", use_container_width=True): 
-                st.session_state.audio_config = {"text":s.get("jp"),"slow":False,"key":st.session_state.audio_config["key"]+1}
-            if cb.button(f"🔴 慢速 {i}", key=f"s_{i}", use_container_width=True): 
-                st.session_state.audio_config = {"text":s.get("jp"),"slow":True,"key":st.session_state.audio_config["key"]+1}
+    for i, s in enumerate(r.get('sentences', []), 1):
+        st.markdown(f'<div class="card-item"><b><span class="idx">{i}</span>{s.get("jp")}</b><br><span style="color:#64748B;font-size:0.85rem;margin-left:30px;">{s.get("kana")}</span><br><span style="color:#059669;margin-left:30px;">🇨🇳 {s.get("cn")}</span></div>', unsafe_allow_html=True)
+        ca, cb = st.columns(2)
+        if ca.button(f"🟢 标准速 {i}", key=f"n_{i}", use_container_width=True): st.session_state.audio_config = {"text":s.get("jp"),"slow":False,"key":st.session_state.audio_config["key"]+1}
+        if cb.button(f"🔴 慢速 {i}", key=f"s_{i}", use_container_width=True): st.session_state.audio_config = {"text":s.get("jp"),"slow":True,"key":st.session_state.audio_config["key"]+1}
 
-# 6. 全局异步发音引擎
 if st.session_state.audio_config["text"]:
     aud = get_audio(st.session_state.audio_config["text"], st.session_state.audio_config["slow"])
     if aud: st.audio(aud, format="audio/mp3", autoplay=True)
