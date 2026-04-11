@@ -4,22 +4,24 @@ import json
 from gtts import gTTS
 import io
 
-# --- 1. 专家级：语义重构与 3 例句强约束引擎 ---
-def get_fusion_expert_final_v2(user_input):
+# --- 1. 顶流语言专家：地道语义重构引擎 ---
+def get_fusion_expert_ultimate_v3(user_input):
+    # 强制指令：严禁直译汉字词，必须使用日语母语者公认的标准单词
     prompt = f"""
-    Role: Senior Japanese Linguist (NHK Standard).
+    Role: Senior Japanese Editor (NHK Standard).
     Task: Translate MEANING of Chinese '{user_input}' to NATIVE Japanese.
     
-    STRICT RULES:
-    1. WORD: Use ONLY native words (e.g. '不合格' for '名落孙山'). 
-    2. ATTRIBUTES: Explicitly state if it's '他動詞' or '自動詞' if applicable.
-    3. QUANTITY: Exactly 3 distinct high-quality sentences.
+    CRITICAL RULES:
+    1. WORD: Use ONLY verified Japanese words. NEVER invent kanji words based on Chinese characters.
+    2. EXAMPLES: '号召' -> '呼びかける', '名落孙山' -> '落第', '工作' -> '仕事'.
+    3. TRANSITIVITY: Specify '他動詞' or '自動詞' if the word is a verb.
+    4. QUANTITY: Exactly 3 high-quality sentences.
     
     JSON format:
     {{
-      "word": "地道词汇",
+      "word": "地道日语词汇",
       "reading": "平假名",
-      "pos": "词性(含自/他动词标注)",
+      "pos": "词性(含自/他动词)",
       "level": "N1-N5",
       "pitch": "声调类型",
       "sentences": [
@@ -31,17 +33,17 @@ def get_fusion_expert_final_v2(user_input):
         client = OpenAI(api_key=st.secrets["NEW_API_KEY"], base_url=st.secrets["NEW_BASE_URL"])
         comp = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": "Professional Japanese Editor. You focus on accurate grammar (transitive/intransitive)."},
+            messages=[{"role": "system", "content": "Professional Japanese Linguist. You focus on native phrasing and accurate transitivity."},
                       {"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0, timeout=8.0
         )
         res = json.loads(comp.choices[0].message.content)
         
-        # 物理拦截逻辑
+        # --- 物理拦截：手动修正 AI 幻觉 ---
         bad_words = ["号召", "名落", "深山", "工作"]
         if any(bw in res['word'] for bw in bad_words):
-             if "号召" in user_input: res['word'], res['reading'] = "呼びかける", "よびかける"
+             if "号召" in user_input: res['word'], res['reading'], res['pos'] = "呼びかける", "よびかける", "動詞(他)"
              elif "名落" in user_input: res['word'], res['reading'] = "落第", "らくだい"
              elif "工作" in user_input: res['word'], res['reading'] = "仕事", "しごと"
         
@@ -50,17 +52,18 @@ def get_fusion_expert_final_v2(user_input):
         return res
     except: return None
 
-# --- 2. 界面设计 ---
+# --- 2. 界面极致紧凑布局 ---
 st.set_page_config(page_title="FUSION Pro", layout="centered", page_icon="👘")
 
 st.markdown("""<style>
     .header-box { border-bottom:2px solid #1E3A8A; padding:5px 0; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
+    .slogan-text { text-align:center; color:#1E3A8A; font-weight:bold; font-size:1.15rem; margin: 12px 0; letter-spacing:1px; font-family: 'Helvetica Neue', Arial, sans-serif; }
     .guide-box { font-size:0.9rem; font-weight:bold; color:#1E3A8A; margin:8px 0; border-left: 4px solid #3B82F6; padding-left:8px; }
     .word-box { background:white; padding:10px 15px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.05); border:1px solid #E5E7EB; text-align:center; margin-bottom:8px; }
     .card-item { border:1.5px solid #3B82F6; padding:8px 10px; border-radius:8px; margin-bottom:5px; background:#F8FAFC; border-left: 5px solid #1E3A8A; }
     .idx { background:#1E3A8A; color:white; width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-weight:bold; margin-right:6px; font-size:10px; }
     .stAudio { display:none; }
-    .stButton>button { padding: 2px 10px; font-size: 0.85rem; height: auto; border-radius: 20px; }
+    .stButton>button { padding: 2px 10px; font-size: 0.85rem; height: auto; border-radius: 5px; }
 </style>""", unsafe_allow_html=True)
 
 WELCOME_DATA = {
@@ -84,25 +87,19 @@ if "last_query" not in st.session_state: st.session_state.last_query = ""
 
 st.markdown('<div class="header-box"><span style="color:#1E3A8A;font-size:1.2rem;font-weight:bold;">FUSION 智能化日语助手 Pro</span><span>👘</span></div>', unsafe_allow_html=True)
 
-# 快速建议标签
-c1, c2, c3, c4 = st.columns(4)
-q_tags = ["努力", "号召", "工作", "出差"]
-btn_val = None
-if c1.button("🔥 努力"): btn_val = "努力"
-if c2.button("🚀 号召"): btn_val = "号召"
-if c3.button("💼 工作"): btn_val = "工作"
-if c4.button("🚄 出差"): btn_val = "出差"
+# 核心寄语（传播学应用）
+st.markdown('<div class="slogan-text">今日も、一緒に頑張りましょう！</div>', unsafe_allow_html=True)
 
-u_in_raw = st.text_input("", placeholder="输入词汇 (按回车直接查询播报)...", label_visibility="collapsed")
-u_in = btn_val if btn_val else u_in_raw
+u_in = st.text_input("", placeholder="输入中文词汇 (按回车直接查询并播报)...", label_visibility="collapsed")
 
 if u_in:
     if u_in != st.session_state.last_query:
-        with st.spinner('专家引擎校准中...'):
-            res = get_fusion_expert_final_v2(u_in)
+        with st.spinner('FUSION 专家正在进行深度语义校准...'):
+            res = get_fusion_expert_ultimate_v3(u_in)
             if res:
                 st.session_state.res_cache = res
                 st.session_state.last_query = u_in
+                # --- 回车即读 ---
                 play_audio(f"これについて、以下の日本語が考えられます。{res['word']}")
     display_data = st.session_state.res_cache
 else:
