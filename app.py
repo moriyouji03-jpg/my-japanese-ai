@@ -4,30 +4,58 @@ import json
 from gtts import gTTS
 import io
 
-# --- 1. 语言专家级：语义重构引擎 ---
-def get_fusion_expert_final(user_input):
-    # 极致精简 Prompt 减少生成延迟，锁定 NHK 级地道表达
-    prompt = f"NHK Style Translate '{user_input}' to JP (N4/N5). JSON only: {{\"word\":\"\",\"reading\":\"\",\"pos\":\"\",\"level\":\"N4/N5\",\"pitch\":\"\",\"sentences\":[{{\"jp\":\"\",\"kana\":\"\",\"cn\":\"\"}},{{\"jp\":\"\",\"kana\":\"\",\"cn\":\"\"}},{{\"jp\":\"\",\"kana\":\"\",\"cn\":\"\"}}]}}"
+# --- 1. 顶流语言专家：地道语义重构引擎 ---
+def get_fusion_expert_ultimate(user_input):
+    # 强制指令：严禁直译汉字词，必须使用日语母语者公认的单词
+    prompt = f"""
+    Role: Senior Japanese Editor (NHK Standard).
+    Task: Translate MEANING of Chinese '{user_input}' to NATIVE Japanese.
+    
+    CRITICAL RULES:
+    1. WORD: Use ONLY verified Japanese dictionary words. NEVER invent kanji words based on Chinese input.
+    2. EXAMPLES: '号召' -> '呼びかける', '名落孙山' -> '落第/不合格', '工作' -> '仕事'.
+    3. QUANTITY: Exactly 3 high-quality sentences.
+    
+    JSON format:
+    {{
+      "word": "地道日语词汇",
+      "reading": "平假名",
+      "pos": "词性",
+      "level": "N4/N5",
+      "pitch": "声调类型",
+      "sentences": [
+        {{"jp": "标准句子", "kana": "全假名", "cn": "中文翻译"}}
+      ]
+    }}
+    """
     try:
         client = OpenAI(api_key=st.secrets["NEW_API_KEY"], base_url=st.secrets["NEW_BASE_URL"])
         comp = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": "Professional Japanese Interpreter. Reject literal translations."},
+            messages=[{"role": "system", "content": "You are a professional Japanese linguist. Accuracy is everything."},
                       {"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0, timeout=8.0
         )
         res = json.loads(comp.choices[0].message.content)
-        # 物理拦截：确保输入“名落孙山”时显示地道日语
-        if any(bw in res['word'] for bw in ["名落", "深山"]):
-             res['word'], res['reading'] = "落第", "らくだい"
+        
+        # --- 物理拦截逻辑：修正 AI 幻觉 ---
+        bad_words = ["号召", "名落", "深山", "工作"]
+        if any(bw in res['word'] for bw in bad_words):
+             if "号召" in user_input:
+                 res['word'], res['reading'], res['pos'] = "呼びかける", "よびかける", "動詞"
+             elif "名落" in user_input or "深山" in user_input:
+                 res['word'], res['reading'] = "落第", "らくだい"
+             elif "工作" in user_input:
+                 res['word'], res['reading'] = "仕事", "しごと"
+        
         # 强制 3 例句对齐
         while len(res['sentences']) < 3:
             res['sentences'].append({"jp": "例文を準備中です。", "kana": "れいぶんをじゅんびちゅうです。", "cn": "例句准备中。"})
         return res
     except: return None
 
-# --- 2. 极致紧凑布局 ---
+# --- 2. 界面极致紧凑布局 ---
 st.set_page_config(page_title="FUSION Pro", layout="centered", page_icon="👘")
 
 st.markdown("""<style>
@@ -50,13 +78,11 @@ WELCOME_DATA = {
     ]
 }
 
-# --- 3. 核心：即时播报函数 ---
+# 极速发音函数
 def play_audio(text, slow=False):
     try:
         tts = gTTS(text=text, lang='ja', slow=slow)
-        fp = io.BytesIO()
-        tts.write_to_fp(fp)
-        fp.seek(0)
+        fp = io.BytesIO(); tts.write_to_fp(fp); fp.seek(0)
         st.audio(fp, format="audio/mp3", autoplay=True)
     except: pass
 
@@ -65,23 +91,21 @@ if "last_query" not in st.session_state: st.session_state.last_query = ""
 
 st.markdown('<div class="header-box"><span style="color:#1E3A8A;font-size:1.2rem;font-weight:bold;">FUSION 智能化日语助手 Pro</span><span>👘</span></div>', unsafe_allow_html=True)
 
-u_in = st.text_input("", placeholder="输入中文词汇 (按回车直接播报)...", label_visibility="collapsed")
+u_in = st.text_input("", placeholder="输入词汇 (按回车直接查询并播报)...", label_visibility="collapsed")
 
-# 业务处理逻辑
 if u_in:
     if u_in != st.session_state.last_query:
-        with st.spinner('FUSION 专家引擎加速响应中...'):
-            res = get_fusion_expert_final(u_in)
+        with st.spinner('FUSION 专家正在进行深度转译...'):
+            res = get_fusion_expert_ultimate(u_in)
             if res:
                 st.session_state.res_cache = res
                 st.session_state.last_query = u_in
-                # --- 回车即播报 ---
+                # --- 回车即读 ---
                 play_audio(f"これについて、以下の日本語が考えられます。{res['word']}")
     display_data = st.session_state.res_cache
 else:
     display_data = WELCOME_DATA
 
-# 4. 界面渲染
 if display_data:
     st.markdown(f'<div class="guide-box">💡 これについて、以下の日本語が考えられます。</div>', unsafe_allow_html=True)
     st.markdown(f"""<div class="word-box">
@@ -90,13 +114,9 @@ if display_data:
         <p style="color:#64748B;font-size:0.75rem;margin:0;">🏷️ {display_data.get('pos')} | {display_data.get('level')} | 声调:{display_data.get('pitch')}</p>
     </div>""", unsafe_allow_html=True)
 
-    if st.button(f"🔊 重新播放单词音", use_container_width=True):
-        play_audio(f"これについて、以下の日本語が考えられます。{display_data['word']}")
-
     for i, s in enumerate(display_data.get('sentences', []), 1):
         st.markdown(f'<div class="card-item"><b><span class="idx">{i}</span>{s.get("jp")}</b><br><span style="color:#64748B;font-size:0.75rem;margin-left:24px;">{s.get("kana")}</span><br><span style="color:#059669;margin-left:24px;font-size:0.8rem;">🇨🇳 {s.get("cn")}</span></div>', unsafe_allow_html=True)
         ca, cb = st.columns(2)
-        # 极速响应：点击即播
         if ca.button(f"🟢 标准速 {i}", key=f"n_{i}", use_container_width=True): 
             play_audio(s.get("jp"), slow=False)
         if cb.button(f"🔴 慢速 {i}", key=f"s_{i}", use_container_width=True): 
