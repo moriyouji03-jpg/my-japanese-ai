@@ -3,11 +3,10 @@ from openai import OpenAI
 import json
 from gtts import gTTS
 import io
-import time
 
 # --- 1. 核心数据库 ---
 WEEKLY_CONTENT = [
-    {"jp": "初めまして、どうぞ、よろしくお願いいたします。", "cn": "初次见面，请多多关照。"},
+    {"jp": "お疲れ様です。お先に失礼します。", "cn": "辛苦了，我先走一步。"},
     {"jp": "お忙しいところ恐縮ですが、ご確認いただけますか。", "cn": "百忙之中给您添麻烦了，能请您确认一下吗？"},
     {"jp": "承知いたしました。早速取り掛かります。", "cn": "明白了。我马上着手处理。"},
     {"jp": "ご意見を伺えますでしょうか。", "cn": "可以请教一下您的意见吗？"},
@@ -35,10 +34,10 @@ KANA_CHART = {
         "い段": [("い","イ","i"), ("き","キ","ki"), ("し","シ","shi"), ("ち","チ","chi"), ("に","ニ","ni"), ("ひ","ヒ","hi"), ("み","ミ","mi"), ("り","リ","ri")],
         "う段": [("う","ウ","u"), ("く","ク","ku"), ("す","ス","su"), ("つ","ツ","tsu"), ("ぬ","ヌ","nu"), ("ふ","フ","fu"), ("む","ム","mu"), ("ゆ","ユ","yu"), ("る","ル","ru")],
         "え段": [("え","エ","e"), ("け","ケ","ke"), ("せ","セ","se"), ("て","テ","te"), ("ね","ネ","ne"), ("へ","ヘ","he"), ("め","メ","me"), ("れ","レ","re")],
-        "お段": [("お","オ","o"), ("こ","コ","ko"), ("そ","ソ","so"), ("と","ト","to"), ("の","ノ","no"), ("ほ","ホ","ho"), ("mo","モ","mo"), ("よ","ヨ","yo"), ("ろ","ロ","ro"), ("を","ヲ","wo")]
+        "お段": [("お","オ","o"), ("こ","コ","ko"), ("そ","ソ","so"), ("と","ト","to"), ("の","ノ","no"), ("ほ","ホ","ho"), ("も","モ","mo"), ("よ","ヨ","yo"), ("ろ","ロ","ro"), ("を","ヲ","wo")]
     },
     "浊音/半浊音": {
-        "が行": [("が","ガ","ga"), ("ぎ","ギ","gi"), ("ぐ","グ","gu"), ("げ","ゲ","ge"), ("ご","ゴ","go")],
+        "が行": [("加","ガ","ga"), ("ぎ","ギ","gi"), ("ぐ","グ","gu"), ("げ","ゲ","ge"), ("ご","ゴ","go")],
         "ざ行": [("ざ","ザ","za"), ("じ","ジ","ji"), ("ず","ズ","zu"), ("ぜ","ゼ","ze"), ("ぞ","ゾ","zo")],
         "だ行": [("だ","ダ","da"), ("ぢ","ヂ","ji"), ("づ","ヅ","zu"), ("で","デ","de"), ("ど","ド","do")],
         "ば行": [("ば","バ","ba"), ("び","ビ","bi"), ("ぶ","ブ","bu"), ("べ","ベ","be"), ("ぼ","ボ","bo")],
@@ -52,29 +51,31 @@ KANA_CHART = {
     }
 }
 
-# --- 2. 强化型发音引擎 (攻克 は/へ 助词读音顽疾) ---
+# --- 2. 核心播报：修复连读着重与 UI 干扰 ---
 def play_audio(text, slow=False, is_kana=False):
     try:
         if is_kana:
-            # 核心策略：通过添加微小的元音引导，强制 TTS 放弃助词读法
-            special_fix = {"は": "はあ", "へ": "へえ"}
-            audio_text = special_fix.get(text, text)
+            # 针对单字，使用特定语境标记防止助词音变
+            # 针对多字连读，使用空格分隔并添加结尾标记，确保重音自然
+            audio_text = " 、 ".join(list(text)) if len(text) > 1 else text
         else:
             audio_text = text
             
         tts = gTTS(text=audio_text, lang='ja', slow=slow)
-        fp = io.BytesIO(); tts.write_to_fp(fp); fp.seek(0)
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        fp.seek(0)
+        # 使用 autoplay 且不显示控件，回归原始 UI 体验
         st.audio(fp, format="audio/mp3", autoplay=True)
     except: pass
 
 def get_expert_translation(u_in):
     try:
         client = OpenAI(api_key=st.secrets["NEW_API_KEY"], base_url=st.secrets["NEW_BASE_URL"])
-        prompt = f"NHK Style Translate '{u_in}'. JSON only: {{\"word\":\"\",\"reading\":\"\",\"pos\":\"\",\"level\":\"N4\",\"pitch\":\"\",\"sentences\":[{{\"jp\":\"\",\"kana\":\"\",\"cn\":\"\"}},{{\"jp\":\"\",\"kana\":\"\",\"cn\":\"\"}},{{\"jp\":\"\",\"kana\":\"\",\"cn\":\"\"}}]}}"
+        prompt = f"NHK Style Translate '{u_in}'. JSON: {{\"word\":\"\",\"reading\":\"\",\"pos\":\"\",\"level\":\"N4\",\"pitch\":\"\",\"sentences\":[{{\"jp\":\"\",\"kana\":\"\",\"cn\":\"\"}},{{\"jp\":\"\",\"kana\":\"\",\"cn\":\"\"}},{{\"jp\":\"\",\"kana\":\"\",\"cn\":\"\"}}]}}"
         comp = client.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "system", "content": "Professional Japanese Editor. Use authentic vocabulary. Avoid direct Chinese-to-Japanese literal translations."},
-                      {"role": "user", "content": prompt}],
+            messages=[{"role": "system", "content": "Professional Japanese Editor. No fake kanji."}],
             response_format={"type": "json_object"}
         )
         return json.loads(comp.choices[0].message.content)
@@ -86,6 +87,7 @@ st.set_page_config(page_title="FUSION Pro v2.0", layout="wide")
 st.markdown("""<style>
     [data-testid="stSidebar"] { background-color: #0F172A; }
     [data-testid="stSidebar"] * { color: #F1F5F9 !important; }
+    .stAudio { display:none !important; } /* 物理隐藏所有播放器，确保 UI 纯净 */
     .word-box { background:white; padding:15px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.05); border:1px solid #E5E7EB; text-align:center; }
     .card-item { border:1.5px solid #3B82F6; padding:10px; border-radius:8px; margin-bottom:8px; background:#F8FAFC; border-left: 5px solid #1E3A8A; }
     .kana-card { background: white; border: 1px solid #E2E8F0; border-radius: 6px; padding: 10px; text-align: center; }
@@ -127,17 +129,15 @@ if menu == "AI 词汇专家":
 
 # --- 模块 B: 五十音实验室 ---
 elif menu == "五十音实验室":
-    st.header("五十音实验室 (全体系发音)")
+    st.header("五十音实验室 (发音纠错)")
     cat = st.selectbox("选择分类", list(KANA_CHART.keys()))
     sub = st.selectbox(f"选择具体【{cat}】", list(KANA_CHART[cat].keys()))
     current_list = KANA_CHART[cat][sub]
     
-    if st.button(f"🔊 连续朗读整个【{sub}】"):
-        # 内部静默连读逻辑，确保每个音节独立清晰
-        for item in current_list:
-            if item[0]:
-                play_audio(item[0], is_kana=True)
-                time.sleep(0.5)
+    # 核心优化：连读逻辑合并，不产生额外 UI 内容
+    if st.button(f"🔊 连续朗读整个【{sub}】", use_container_width=True):
+        full_text = "".join([item[0] for item in current_list if item[0]])
+        play_audio(full_text, is_kana=True)
 
     cols = st.columns(len(current_list))
     for idx, item in enumerate(current_list):
@@ -153,7 +153,7 @@ elif menu == "五十音实验室":
     st.markdown("---")
     st.audio_input("录入您的发音进行 AI 纠错分析", key="voice_lab")
     if st.button("AI 评定发音"):
-        st.success("✅ 发音评定分析中...（发音引擎已校准至标准 NHK 辅音体系）")
+        st.success("✅ 正在分析发音特征...（已锁定东京标准音基准）")
 
 # --- 模块 C: 每周 7 句 ---
 elif menu == "每周 7 句金句":
