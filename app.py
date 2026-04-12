@@ -138,8 +138,8 @@ if menu == "AI 词汇专家":
                 if col2.button(f"🐢 慢速 {i}", key=f"slo_btn_{i}"): play_audio(s["jp"], slow=True)
 
 # --- 模块 B: 五十音实验室 ---
-elif menu == "五十音实验室（工事中！！）":
-    st.header("五十音实验室（工事中！！）")
+elif menu == "五十音实验室":
+    st.header("五十音实验室")
     cat = st.selectbox("选择分类", list(KANA_CHART.keys()))
     sub = st.selectbox(f"选择具体【{cat}】", list(KANA_CHART[cat].keys()))
     current_list = KANA_CHART[cat][sub]
