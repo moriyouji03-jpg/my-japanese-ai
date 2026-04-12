@@ -85,7 +85,7 @@ st.markdown("""<style>
 
 with st.sidebar:
     st.markdown("## FUSION Pro")
-    menu = st.radio("功能模块切换", ["AI 词汇专家", "五十音实验室", "每周 7 句金句"], index=0)
+    menu = st.radio("功能模块切换", ["AI 词汇专家", "五十音实验室（工事中！）", "每周 7 句金句"], index=0)
     st.markdown("---")
     st.markdown("<p style='color:#3B82F6; font-weight:bold; text-align:center;'>🌸 今日も、一緒に頑張りましょう！</p>", unsafe_allow_html=True)
 
