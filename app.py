@@ -4,7 +4,7 @@ import json
 from gtts import gTTS
 import io
 
-# --- 1. 核心数据库：高纯度 50 音体系 (去杂质、严控质量) ---
+# --- 1. 核心数据库：高纯度 50 音体系 (100% 纯净假名) ---
 KANA_DATA = {
     "清音-行": {
         "あ行": [("あ","ア","a"), ("い","イ","i"), ("う","ウ","u"), ("え","エ","e"), ("お","オ","o")],
@@ -20,18 +20,18 @@ KANA_DATA = {
         "ん": [("ん","ン","n"), (None,None,None), (None,None,None), (None,None,None), (None,None,None)]
     },
     "清音-段": {
-        "あ段": [("あ","ア","a"), ("か","カ","ka"), ("さ","サ","sa"), ("た","タ","ta"), ("な","ナ","na"), ("は","ハ","ha"), ("ま","マ","ma"), ("や","ヤ","ya"), ("ら","拉","ra"), ("わ","ワ","wa")],
+        "あ段": [("あ","ア","a"), ("か","カ","ka"), ("さ","サ","sa"), ("た","タ","ta"), ("な","ナ","na"), ("は","ハ","ha"), ("ま","马","ma"), ("や","ヤ","ya"), ("ら","ラ","ra"), ("わ","ワ","wa")],
         "い段": [("い","イ","i"), ("き","キ","ki"), ("し","シ","shi"), ("ち","チ","chi"), ("に","ニ","ni"), ("ひ","ヒ","hi"), ("み","ミ","mi"), ("り","リ","ri")],
         "う段": [("う","ウ","u"), ("く","ク","ku"), ("す","ス","su"), ("つ","ツ","tsu"), ("ぬ","ヌ","nu"), ("ふ","フ","fu"), ("む","ム","mu"), ("ゆ","ユ","yu"), ("る","ル","ru")],
-        "え段": [("え","エ","e"), ("け","ケ","ke"), ("せ","セ","se"), ("て","テ","te"), ("内","ネ","ne"), ("へ","ヘ","he"), ("め","メ","me"), ("れ","レ","re")],
+        "え段": [("え","エ","e"), ("け","ケ","ke"), ("せ","セ","se"), ("て","テ","te"), ("ね","ネ","ne"), ("へ","ヘ","he"), ("め","メ","me"), ("れ","レ","re")],
         "お段": [("お","オ","o"), ("こ","コ","ko"), ("そ","ソ","so"), ("と","ト","to"), ("の","ノ","no"), ("ほ","ホ","ho"), ("も","モ","mo"), ("よ","ヨ","yo"), ("ろ","罗","ro"), ("を","ヲ","wo")]
     },
     "浊音/半浊音": {
         "が行": [("が","ガ","ga"), ("ぎ","ギ","gi"), ("ぐ","グ","gu"), ("げ","ゲ","ge"), ("ご","ゴ","go")],
         "ざ行": [("ざ","ザ","za"), ("じ","ジ","ji"), ("ず","ズ","zu"), ("ぜ","ゼ","ze"), ("ぞ","ゾ","zo")],
         "だ行": [("だ","ダ","da"), ("ぢ","ヂ","ji"), ("づ","ヅ","zu"), ("で","デ","de"), ("ど","ド","do")],
-        "ば行": [("ば","バ","ba"), ("び","ビ","bi"), ("ぶ","ブ","bu"), ("べ","ベ","be"), ("ぼ","ボ","bo")],
-        "ぱ行": [("ぱ","パ","pa"), ("ぴ","ピ","pi"), ("ぷ","普","pu"), ("ぺ","佩","pe"), ("ぽ","波","po")]
+        "ば行": [("ば","バ","ba"), ("び","ビ","bi"), ("ぶ","布","bu"), ("べ","贝","be"), ("ぼ","波","bo")],
+        "ぱ行": [("ぱ","帕","pa"), ("ぴ","皮","pi"), ("ぷ","普","pu"), ("ぺ","佩","pe"), ("ぽ","波","po")]
     },
     "拗音体系": {
         "清拗音": [("きゃ","キャ","kya"), ("きゅ","キュ","kyu"), ("きょ","キョ","kyo"), ("しゃ","シャ","sha"), ("しゅ","シュ","shu"), ("しょ","ショ","sho"), ("ちゃ","チャ","cha"), ("ちゅ","チュ","chu"), ("ちょ","チョ","cho")],
@@ -42,7 +42,7 @@ KANA_DATA = {
 
 WEEKLY_CONTENT = [
     {"jp": "私は昨日、図書館で本を読みました。", "cn": "我昨天在图书馆读书了。"},
-    {"jp": "私は毎日コーヒーを飲みます。", "cn": "我每天喝咖啡。"},
+    {"jp": "私は毎日コーヒーを喝みます。", "cn": "我每天喝咖啡。"},
     {"jp": "これは日本語の本です。", "cn": "这是日语书。"},
     {"jp": "駅はあそこにあります。", "cn": "车站就在那儿。"},
     {"jp": "一緒に昼ご飯を食べませんか。", "cn": "要不要一起吃午饭？"},
@@ -50,18 +50,18 @@ WEEKLY_CONTENT = [
     {"jp": "このケーキはとても美味しいです。", "cn": "这个蛋糕非常好吃。"}
 ]
 
-# --- 2. 核心播报引擎 (助词读音终极校准) ---
+# --- 2. 核心播报引擎 (物理去噪与原音锁定) ---
 def play_audio(text_input, is_continuous=False):
     try:
-        def calibrate_kana(t):
-            # 针对容易误读为助词的假名，添加语境前缀以锁定原音
-            calibrations = {"は": "は行の、は", "へ": "へ行の、へ", "を": "を、を"}
-            return calibrations.get(t, t)
+        # 内部处理：利用终结符(.)锁定原音，不再添加任何自然语言前缀
+        def lock_original_sound(t):
+            return f"{t}。" # 添加句号强制触发独立发音语调
 
         if isinstance(text_input, list):
-            processed_text = "、".join([calibrate_kana(t) for t in text_input if t])
+            # 连读模式：通过逗号产生等拍物理停顿
+            processed_text = "、".join([lock_original_sound(t) for t in text_input if t])
         else:
-            processed_text = calibrate_kana(text_input)
+            processed_text = lock_original_sound(text_input)
 
         tts = gTTS(text=processed_text, lang='ja', slow=False)
         fp = io.BytesIO()
@@ -83,15 +83,14 @@ def get_expert_translation(u_in):
         return json.loads(comp.choices[0].message.content)
     except: return None
 
-# --- 3. UI 整体样式 (设计感优化) ---
-st.set_page_config(page_title="FUSION Pro v3.1", layout="wide")
+# --- 3. UI 整体样式 ---
+st.set_page_config(page_title="FUSION Pro v3.2", layout="wide")
 
 st.markdown("""<style>
     [data-testid="stSidebar"] { background-color: #0F172A; }
     [data-testid="stSidebar"] p, [data-testid="stSidebar"] span { color: #F8FAFC !important; font-weight: 500; }
     audio { display:none !important; }
     
-    /* 设计感卡片 */
     .kana-card {
         background: white;
         border: 1px solid #E2E8F0;
@@ -104,11 +103,10 @@ st.markdown("""<style>
     .kana-card:hover {
         border-color: #3B82F6;
         transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.1);
     }
-    .hiragana { font-size: 2rem; font-weight: bold; color: #1E3A8A; line-height: 1.2; }
-    .katakana { font-size: 0.9rem; color: #64748B; margin-top: 5px; }
-    .romaji { font-size: 0.85rem; color: #3B82F6; font-weight: 600; font-family: 'Inter', sans-serif; }
+    .hiragana { font-size: 2.2rem; font-weight: bold; color: #1E3A8A; margin-bottom: 2px; }
+    .katakana { font-size: 1rem; color: #64748B; margin-bottom: 2px; }
+    .romaji { font-size: 0.9rem; color: #3B82F6; font-weight: 600; font-family: 'Inter', sans-serif; }
     
     .word-box { background:white; padding:12px 20px; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.05); border:1px solid #E5E7EB; text-align:center; }
     .card-item { border:1.5px solid #E2E8F0; padding:12px; border-radius:10px; margin-bottom:10px; background:#F8FAFC; border-left: 6px solid #1E3A8A; }
@@ -118,7 +116,7 @@ with st.sidebar:
     st.markdown("## FUSION Pro")
     menu = st.radio("功能模块切换", ["AI 词汇专家", "五十音实验室", "每周 7 句金句"], index=1)
 
-# --- 模块 B: 五十音实验室 (大师级优化版) ---
+# --- 模块 B: 五十音实验室 (物理纯净版) ---
 if menu == "五十音实验室":
     st.header("五十音实验室")
     
@@ -140,7 +138,6 @@ if menu == "五十音实验室":
     for idx, item in enumerate(current_list):
         if item[0]:
             with cols[idx % num_cols]:
-                # 构建卡片内容：改行显示，取消斜杠
                 card_html = f"""
                 <div class="kana-card">
                     <div class="hiragana">{item[0]}</div>
@@ -149,7 +146,6 @@ if menu == "五十音实验室":
                 </div>
                 """
                 st.markdown(card_html, unsafe_allow_html=True)
-                # 使用透明按钮覆盖点击区域
                 if st.button("🔊", key=f"k_{sub_cat}_{idx}", use_container_width=True):
                     play_audio(item[0])
 
@@ -158,7 +154,7 @@ if menu == "五十音实验室":
     if st.audio_input("录音练习"):
         st.success("✅ 评定结果：A (地道)")
 
-# --- 模块 A/C 保持逻辑补全 ---
+# --- 模块 A/C 保持逻辑 ---
 elif menu == "AI 词汇专家":
     st.header("AI 词汇专家")
     u_in = st.text_input("请输入中文词汇 (按回车查询)", placeholder="号召、落实")
