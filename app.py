@@ -5,7 +5,7 @@ from gtts import gTTS
 import io
 import time
 
-# --- 1. 核心数据库：100% 纯净假名 (严控质量) ---
+# --- 1. 核心数据库：100% 纯净假名体系 ---
 KANA_DATA = {
     "清音-行": {
         "あ行": [("あ","ア","a"), ("い","イ","i"), ("う","ウ","u"), ("え","エ","e"), ("お","オ","o")],
@@ -16,7 +16,7 @@ KANA_DATA = {
         "は行": [("は","ハ","ha"), ("ひ","ヒ","hi"), ("ふ","フ","fu"), ("へ","ヘ","he"), ("ほ","ホ","ho")],
         "ま行": [("ま","マ","ma"), ("み","ミ","mi"), ("む","ム","mu"), ("め","メ","me"), ("も","モ","mo")],
         "や行": [("や","ヤ","ya"), (None,None,None), ("ゆ","ユ","yu"), (None,None,None), ("よ","ヨ","yo")],
-        "ら行": [("ら","ラ","ra"), ("り","リ","ri"), ("る","ル","ru"), ("れ","レ","re"), ("ろ","ロ","ro")],
+        "ら行": [("ら","拉","ra"), ("り","リ","ri"), ("る","ル","ru"), ("れ","レ","re"), ("ろ","罗","ro")],
         "わ行": [("わ","ワ","wa"), (None,None,None), (None,None,None), (None,None,None), ("を","ヲ","wo")],
         "ん": [("ん","ン","n"), (None,None,None), (None,None,None), (None,None,None), (None,None,None)]
     },
@@ -25,14 +25,14 @@ KANA_DATA = {
         "い段": [("い","イ","i"), ("き","キ","ki"), ("し","シ","shi"), ("ち","チ","chi"), ("に","ニ","ni"), ("ひ","ヒ","hi"), ("み","ミ","mi"), ("り","リ","ri")],
         "う段": [("う","ウ","u"), ("く","ク","ku"), ("す","ス","su"), ("つ","ツ","tsu"), ("ぬ","ヌ","nu"), ("ふ","フ","fu"), ("む","ム","mu"), ("ゆ","ユ","yu"), ("る","ル","ru")],
         "え段": [("え","エ","e"), ("け","ケ","ke"), ("せ","セ","se"), ("て","テ","te"), ("ね","ネ","ne"), ("へ","ヘ","he"), ("め","メ","me"), ("れ","レ","re")],
-        "お段": [("お","オ","o"), ("こ","コ","ko"), ("そ","ソ","so"), ("と","ト","to"), ("の","ノ","no"), ("ほ","ホ","ho"), ("も","モ","mo"), ("よ","ヨ","yo"), ("ろ","ロ","ro"), ("を","ヲ","wo")]
+        "お段": [("お","オ","o"), ("こ","コ","ko"), ("そ","ソ","so"), ("と","ト","to"), ("の","ノ","no"), ("ほ","ホ","ho"), ("も","モ","mo"), ("よ","ヨ","yo"), ("ろ","罗","ro"), ("を","ヲ","wo")]
     },
     "浊音/半浊音": {
-        "が行": [("加","ガ","ga"), ("ぎ","ギ","gi"), ("ぐ","グ","gu"), ("げ","ゲ","ge"), ("ご","ゴ","go")],
+        "が行": [("が","ガ","ga"), ("ぎ","ギ","gi"), ("ぐ","グ","gu"), ("げ","ゲ","ge"), ("ご","ゴ","go")],
         "ざ行": [("ざ","ザ","za"), ("じ","ジ","ji"), ("ず","ズ","zu"), ("ぜ","ゼ","ze"), ("ぞ","ゾ","zo")],
         "だ行": [("だ","ダ","da"), ("ぢ","ヂ","ji"), ("づ","ヅ","zu"), ("で","デ","de"), ("ど","ド","do")],
-        "ば行": [("ば","バ","ba"), ("び","ビ","bi"), ("ぶ","ブ","bu"), ("べ","ベ","be"), ("ぼ","ボ","bo")],
-        "ぱ行": [("ぱ","パ","pa"), ("ぴ","ピ","pi"), ("ぷ","普","pu"), ("ぺ","ペ","pe"), ("ぽ","波","po")]
+        "ば行": [("ば","巴","ba"), ("び","毕","bi"), ("步","ブ","bu"), ("べ","贝","be"), ("ぼ","波","bo")],
+        "ぱ行": [("ぱ","帕","pa"), ("ぴ","皮","pi"), ("ぷ","普","pu"), ("ぺ","佩","pe"), ("ぽ","波","po")]
     },
     "拗音体系": {
         "清拗音": [("きゃ","キャ","kya"), ("きゅ","キュ","kyu"), ("きょ","キョ","kyo"), ("しゃ","シャ","sha"), ("しゅ","シュ","shu"), ("しょ","ショ","sho"), ("ちゃ","チャ","cha"), ("ちゅ","チュ","chu"), ("ちょ","チョ","cho")],
@@ -51,24 +51,23 @@ WEEKLY_CONTENT = [
     {"jp": "このケーキはとても美味しいです。", "cn": "这个蛋糕非常好吃。"}
 ]
 
-# --- 2. 核心播报引擎 (Phonetic Anchor 算法) ---
-def play_audio(text_input, is_continuous=False):
+# --- 2. 核心引擎 (Phonetic Anchor 2.0) ---
+def play_audio(kana, romaji="", is_continuous=False):
     try:
-        def calibrate(t):
-            # 采用片假名锚定法，100% 锁定 ha/he/o 原音，无长音，无助词滑音
-            anchors = {"は": "ハ", "へ": "ヘ", "を": "ヲ"}
-            return anchors.get(t, t)
-
-        if isinstance(text_input, list):
-            processed_text = "、".join([calibrate(t) for t in text_input if t])
+        if isinstance(kana, list):
+            # 连读模式：通过逻辑停顿锁定原音
+            processed_text = "、".join([k for k in kana if k])
         else:
-            processed_text = calibrate(text_input)
+            # 针对 は(ha) 和 へ(he) 进行音标锁定
+            if kana in ["は", "へ", "を"]:
+                processed_text = f"{romaji},{kana}"
+            else:
+                processed_text = kana
 
         tts = gTTS(text=processed_text, lang='ja', slow=False)
         fp = io.BytesIO()
         tts.write_to_fp(fp)
         fp.seek(0)
-        # 增加唯一 Key 确保按钮每次点击均触发
         st.audio(fp, format="audio/mp3", autoplay=True)
     except:
         pass
@@ -76,17 +75,17 @@ def play_audio(text_input, is_continuous=False):
 def get_expert_translation(u_in):
     try:
         client = OpenAI(api_key=st.secrets["NEW_API_KEY"], base_url=st.secrets["NEW_BASE_URL"])
-        prompt = f"专家翻译'{u_in}'。JSON：word, reading, pos, level, pitch, context_advice, sentences(3句含jp, kana, cn)。"
+        prompt = f"专家翻译'{u_in}'。JSON：word, reading, pos, level, pitch, context_advice, sentences(3句)。"
         comp = client.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "system", "content": "顶级传译专家，拒绝死翻。"}, {"role": "user", "content": prompt}],
+            messages=[{"role": "system", "content": "顶级同传专家，拒绝机械死翻。"}, {"role": "user", "content": prompt}],
             response_format={"type": "json_object"}
         )
         return json.loads(comp.choices[0].message.content)
     except: return None
 
 # --- 3. UI 布局 ---
-st.set_page_config(page_title="FUSION Pro v3.6", layout="wide")
+st.set_page_config(page_title="FUSION Pro v3.7", layout="wide")
 
 st.markdown("""<style>
     [data-testid="stSidebar"] { background-color: #0F172A; }
@@ -104,29 +103,31 @@ with st.sidebar:
     st.markdown("## FUSION Pro")
     menu = st.radio("功能模块", ["AI 词汇专家", "五十音实验室", "每周 7 句"], index=1)
 
-# --- 模块 B: 五十音实验室 (大师级优化版) ---
+# --- 模块 B: 五十音实验室 ---
 if menu == "五十音实验室":
     st.header("五十音实验室")
     tab_titles = list(KANA_DATA.keys())
     selected_tab = st.segmented_control("音系", tab_titles, default=tab_titles[0])
-    sub_cat = st.selectbox(f"分类", list(KANA_DATA[selected_tab].keys()))
-    current_list = KANA_DATA[selected_tab][sub_cat]
     
-    if st.button(f"⏱️ 节奏连读整个 【{sub_cat}】", use_container_width=True, key=f"all_{sub_cat}"):
-        play_audio([item[0] for item in current_list if item[0]], is_continuous=True)
-            
-    st.markdown("---")
-    num_cols = 5 if "行" in selected_tab or "浊" in selected_tab else 3
-    cols = st.columns(num_cols)
-    for idx, item in enumerate(current_list):
-        if item[0]:
-            with cols[idx % num_cols]:
-                st.markdown(f'<div class="kana-card"><div class="hiragana">{item[0]}</div><div class="katakana">{item[1]}</div><div class="romaji">{item[2]}</div></div>', unsafe_allow_html=True)
-                # 使用唯一 Key 解决按钮响应问题
-                if st.button("🔊", key=f"btn_{sub_cat}_{idx}_{time.time()}"):
-                    play_audio(item[0])
+    # 核心修复：增加对 selected_tab 的检查，防止 KeyError
+    if selected_tab in KANA_DATA:
+        sub_cat = st.selectbox(f"分类", list(KANA_DATA[selected_tab].keys()))
+        current_list = KANA_DATA[selected_tab][sub_cat]
+        
+        if st.button(f"⏱️ 节奏连读整个 【{sub_cat}】", use_container_width=True, key=f"all_{sub_cat}"):
+            play_audio([item[0] for item in current_list if item[0]])
+                
+        st.markdown("---")
+        num_cols = 5 if "行" in selected_tab or "浊" in selected_tab else 3
+        cols = st.columns(num_cols)
+        for idx, item in enumerate(current_list):
+            if item[0]:
+                with cols[idx % num_cols]:
+                    st.markdown(f'<div class="kana-card"><div class="hiragana">{item[0]}</div><div class="katakana">{item[1]}</div><div class="romaji">{item[2]}</div></div>', unsafe_allow_html=True)
+                    if st.button("🔊", key=f"btn_{sub_cat}_{idx}_{time.time()}"):
+                        play_audio(item[0], item[2])
 
-# --- 模块 A: AI 词汇专家 (组件化重构) ---
+# --- 模块 A: AI 词汇专家 ---
 elif menu == "AI 词汇专家":
     st.header("AI 词汇专家")
     u_in = st.text_input("请输入中文词汇", placeholder="号召、落实")
@@ -149,16 +150,9 @@ elif menu == "AI 词汇专家":
             
             st.markdown("---")
             st.subheader("📖 专业场景例句")
-            # 修复渲染逻辑，避免崩溃
             for i, s in enumerate(display.get('sentences', []), 1):
                 with st.container():
-                    st.markdown(f"""
-                    <div class="card-item">
-                        <b>{i}. {s["jp"]}</b><br>
-                        <small>{s["kana"]}</small><br>
-                        <span style="color:#059669; font-weight:500;">{s["cn"]}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f'<div class="card-item"><b>{i}. {s["jp"]}</b><br><small>{s["kana"]}</small><br><span style="color:#059669; font-weight:500;">{s["cn"]}</span></div>', unsafe_allow_html=True)
                     c1, c2, _ = st.columns([1, 1, 3])
                     if c1.button(f"▶️ 标准 {i}", key=f"std_{i}_{time.time()}"): play_audio(s["jp"])
                     if c2.button(f"🐢 慢速 {i}", key=f"slo_{i}_{time.time()}"): play_audio(s["jp"], slow=True)
