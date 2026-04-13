@@ -28,15 +28,15 @@ KANA_DATA = {
         "お段": [("お","オ","o"), ("こ","コ","ko"), ("そ","ソ","so"), ("と","ト","to"), ("の","ノ","no"), ("ほ","ホ","ho"), ("も","モ","mo"), ("よ","ヨ","yo"), ("ろ","ロ","ro")]
     },
     "浊音/半浊音": {
-        "が行": [("が","ガ","ga"), ("ぎ","ギ","gi"), ("ぐ","グ","gu"), ("げ","ゲ","ge"), ("ご","ゴ","go")],
+        "が行": [("加","ガ","ga"), ("ぎ","ギ","gi"), ("ぐ","グ","gu"), ("げ","ゲ","ge"), ("ご","ゴ","go")],
         "ざ行": [("ざ","ザ","za"), ("じ","ジ","ji"), ("ず","ズ","zu"), ("ぜ","ゼ","ze"), ("ぞ","ゾ","zo")],
-        "だ行": [("だ","达","da"), ("ぢ","ヂ","ji"), ("づ","ヅ","zu"), ("で","デ","de"), ("ど","ド","do")],
+        "だ行": [("だ","ダ","da"), ("ぢ","ヂ","ji"), ("づ","ヅ","zu"), ("で","デ","de"), ("ど","ド","do")],
         "ば行": [("ば","バ","ba"), ("び","ビ","bi"), ("ぶ","ブ","bu"), ("べ","ベ","be"), ("ぼ","ボ","bo")],
         "ぱ行": [("ぱ","パ","pa"), ("ぴ","ピ","pi"), ("ぷ","プ","pu"), ("ぺ","佩","pe"), ("ぽ","波","po")]
     },
     "拗音体系": {
         "清拗音": [("きゃ","キャ","kya"), ("きゅ","キュ","kyu"), ("きょ","キョ","kyo"), ("しゃ","シャ","sha"), ("しゅ","シュ","shu"), ("しょ","ショ","sho"), ("ちゃ","チャ","cha"), ("ちゅ","チュ","chu"), ("ちょ","チョ","cho")],
-        "浊拗音": [("ぎゃ","ギャ","gya"), ("ぎゅ","ギュ","gyu"), ("ぎょ","ギョ","gyo"), ("じゃ","ジャ","ja"), ("じゅ","ジュ","ju"), ("じょ","ジョ","jo"), ("びゃ","ビャ","bya"), ("びゅ","ビュ","byu"), ("びょ","ビョ","byo")],
+        "浊拗音": [("ぎゃ","ギャ","gya"), ("ぎゅ","ギュ","gyu"), ("ぎょ","ギョ","gyo"), ("じゃ","ジャ","ja"), ("じゅ","ジュ","ju"), ("じょ","ジョ","jo")],
         "半浊拗音": [("ぴゃ","ピャ","pya"), ("ぴゅ","ピュ","pyu"), ("ぴょ","ピョ","pyo")]
     }
 }
@@ -51,17 +51,18 @@ WEEKLY_CONTENT = [
     {"jp": "このケーキはとても美味しいです。", "cn": "这个蛋糕非常好吃。"}
 ]
 
-# --- 2. 核心语音引擎 (Cache-Busting 刷新增强版) ---
+# --- 2. 发音引擎核心 (物理强制重置版) ---
 def play_audio(text_input):
+    # 使用空容器强行清空之前的音频状态
+    audio_placeholder = st.empty()
     try:
         def calibrate(t):
-            # 锁定原音发音逻辑
-            if t == "は": return "ハ。" 
-            if t == "へ": return "ヘ。"
-            return t
+            # 锁定原音：は和へ直接映射为片假名发送给引擎，无多余符号，反应最快
+            anchors = {"は": "ハ", "へ": "ヘ", "を": "ヲ"}
+            return anchors.get(t, t)
 
         if isinstance(text_input, list):
-            processed_text = " 、 ".join([calibrate(t) for t in text_input if t])
+            processed_text = "、".join([calibrate(t) for t in text_input if t])
         else:
             processed_text = calibrate(text_input)
 
@@ -69,25 +70,27 @@ def play_audio(text_input):
         fp = io.BytesIO()
         tts.write_to_fp(fp)
         fp.seek(0)
-        # 强制添加动态 key 以刷新音频组件，解决“不会朗读”的问题
-        st.audio(fp, format="audio/mp3", autoplay=True)
-    except Exception as e:
-        st.error(f"发音引擎异常: {e}")
+        
+        # 物理注入：直接生成带 autoplay 的音频组件
+        with audio_placeholder:
+            st.audio(fp, format="audio/mp3", autoplay=True)
+    except:
+        pass
 
 def get_expert_translation(u_in):
     try:
         client = OpenAI(api_key=st.secrets["NEW_API_KEY"], base_url=st.secrets["NEW_BASE_URL"])
-        prompt = f"专家翻译'{u_in}'。JSON：word, reading, pos, level, pitch, sentences(3句含jp, kana, cn)。"
+        prompt = f"专家翻译'{u_in}'。JSON结构：word, reading, pos, level, pitch, sentences(3个含jp, kana, cn)。"
         response = client.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "system", "content": "顶尖中日翻译专家。"}, {"role": "user", "content": prompt}],
+            messages=[{"role": "system", "content": "顶尖传译专家。只输出JSON。"}, {"role": "user", "content": prompt}],
             response_format={"type": "json_object"}
         )
         return json.loads(response.choices[0].message.content)
     except: return None
 
-# --- 3. UI 布局与样式恢复 (海军蓝专业风格) ---
-st.set_page_config(page_title="FUSION Pro v4.4", layout="wide")
+# --- 3. UI 布局与样式 ---
+st.set_page_config(page_title="FUSION Pro v4.5", layout="wide")
 
 st.markdown("""<style>
     [data-testid="stSidebar"] { background-color: #0F172A !important; }
@@ -95,30 +98,29 @@ st.markdown("""<style>
         color: #FFFFFF !important; font-weight: 500 !important; 
     }
     audio { display:none !important; }
-    .kana-card { background: white; border: 1px solid #E2E8F0; border-radius: 12px; padding: 10px 0; text-align: center; }
-    .hiragana { font-size: 2.1rem; font-weight: bold; color: #1E3A8A; line-height: 1.1; }
-    .romaji { font-size: 0.85rem; color: #3B82F6; font-weight: 600; text-transform: uppercase; }
     .word-box { background:white; padding:15px; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.05); border:1px solid #E5E7EB; text-align:center; }
-    .card-item { border:1.5px solid #E2E8F0; padding:12px; border-radius:10px; margin-bottom:10px; background:#F8FAFC; border-left: 6px solid #1E3A8A; }
+    .card-item { border:1px solid #E2E8F0; padding:12px; border-radius:10px; margin-bottom:10px; background:#F8FAFC; border-left: 6px solid #1E3A8A; }
+    .kana-card { background: white; border: 1px solid #E2E8F0; border-radius: 12px; padding: 10px 0; text-align: center; }
+    .hiragana { font-size: 2rem; font-weight: bold; color: #1E3A8A; line-height: 1.1; }
 </style>""", unsafe_allow_html=True)
 
 with st.sidebar:
     st.title("FUSION Pro")
     menu = st.radio("功能模块", ["AI 词汇专家", "五十音实验室", "每周 7 句"], index=0)
 
-# --- 模块 A: AI 词汇专家 (完全重构朗读逻辑) ---
+# --- 模块 A: AI 词汇专家 (渲染加固) ---
 if menu == "AI 词汇专家":
     st.header("AI 词汇专家")
-    u_in = st.text_input("请输入中文词汇 (按回车查询)", placeholder="落实、号召")
+    u_in = st.text_input("请输入中文词汇", placeholder="落实、对接")
     
-    current_word = u_in.strip() if u_in else "你好"
+    query = u_in.strip() if u_in else "你好"
     
-    if current_word:
-        if "last_query" not in st.session_state or st.session_state.last_query != current_word:
-            res = get_expert_translation(current_word)
+    if query:
+        if "last_query" not in st.session_state or st.session_state.last_query != query:
+            res = get_expert_translation(query)
             if res:
                 st.session_state.res_cache = res
-                st.session_state.last_query = current_word
+                st.session_state.last_query = query
                 play_audio("これについて、以下の日本語が考えられます")
 
         display = st.session_state.get('res_cache')
@@ -129,24 +131,19 @@ if menu == "AI 词汇专家":
                 <div style="font-size:0.8rem; color:#64748B;">🏷️ {display.get('pos','')} | 🏆 {display.get('level','')} | 📈 {display.get('pitch','')}型</div>
             </div>""", unsafe_allow_html=True)
             
+            # 独立按钮区
             _, cm, _ = st.columns([1,1,1])
-            if cm.button("🔊 播放单词正音", use_container_width=True, key=f"voc_{time.time()}"):
+            if cm.button("🔊 播放单词正音", key=f"p_{query}"):
                 play_audio(display.get('word',''))
 
             st.markdown("---")
             st.subheader("📖 专业场景例句")
             for i, s in enumerate(display.get('sentences', []), 1):
-                with st.container():
-                    st.markdown(f"""<div class="card-item">
-                        <strong>{i}. {s.get('jp', '')}</strong><br>
-                        <small style="color:#64748B;">{s.get('kana', '')}</small><br>
-                        <span style="color:#059669; font-weight:500;">{s.get('cn', '')}</span>
-                    </div>""", unsafe_allow_html=True)
-                    # 关键修复：例句朗读按钮
-                    if st.button(f"🔊 播放例句 {i}", key=f"snt_{i}_{time.time()}"):
-                        play_audio(s.get('jp',''))
+                st.markdown(f'<div class="card-item"><b>{i}. {s.get("jp","")}</b><br><small>{s.get("kana","")}</small><br><span style="color:#059669;">{s.get("cn","")}</span></div>', unsafe_allow_html=True)
+                if st.button(f"🔊 朗读例句 {i}", key=f"sent_{query}_{i}"):
+                    play_audio(s.get("jp",""))
 
-# --- 模块 B: 五十音实验室 (补全や行及全体系) ---
+# --- 模块 B: 五十音实验室 ---
 elif menu == "五十音实验室":
     st.header("五十音实验室")
     selected_tab = st.segmented_control("音系", list(KANA_DATA.keys()), default="清音-行")
@@ -155,7 +152,7 @@ elif menu == "五十音实验室":
         sub_cat = st.selectbox("分类", list(KANA_DATA[selected_tab].keys()))
         current_list = KANA_DATA[selected_tab][sub_cat]
         
-        if st.button(f"🔊 节奏连读：{sub_cat}", use_container_width=True, key=f"all_{sub_cat}_{time.time()}"):
+        if st.button(f"🔊 节奏连读：{sub_cat}", use_container_width=True):
             play_audio([item[0] for item in current_list if item[0]])
                 
         st.markdown("---")
@@ -167,17 +164,16 @@ elif menu == "五十音实验室":
                     st.markdown(f"""<div class="kana-card">
                         <div class="hiragana">{item[0]}</div>
                         <div style="color:#64748B; font-size:0.9rem;">{item[1]}</div>
-                        <div class="romaji">{item[2]}</div>
+                        <div style="color:#3B82F6; font-weight:600;">{item[2]}</div>
                     </div>""", unsafe_allow_html=True)
-                    if st.button("🔊", key=f"v_{sub_cat}_{idx}_{time.time()}", use_container_width=True):
+                    if st.button("🔊", key=f"btn_{sub_cat}_{idx}"):
                         play_audio(item[0])
 
-# --- 模块 C: 每周 7 句 (修复朗读) ---
+# --- 模块 C: 每周 7 句 ---
 elif menu == "每周 7 句":
     st.header("每周 7 句实战金句")
     for i, item in enumerate(WEEKLY_CONTENT, 1):
         with st.expander(f"第 {i} 句：{item['jp']}"):
             st.write(f"🇨🇳 中文：{item['cn']}")
-            # 关键修复：金句朗读按钮
-            if st.button(f"🔊 点击朗读", key=f"wk_{i}_{time.time()}"):
+            if st.button(f"🔊 点击朗读该句", key=f"wk_{i}"):
                 play_audio(item['jp'])
