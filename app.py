@@ -271,7 +271,8 @@ elif menu == "每周 7 句":
             st.write(f"🇨🇳 中文：{item['cn']}")
             if st.button(f"🔊 点击朗读该句", key=f"wk_{i}"):
                 play_audio(item['jp'])
-# elif menu == "职场聊天常用句":
+
+elif menu == "职场聊天常用句":
      st.header("职场聊天常用表现　50句")
      st.caption("按场景分类：报告进度 / 请假迟到 / 道歉说明 / 请求拜托 / 确认回复 / 感谢问候")
      for i, item in enumerate(BIZCHAT_CONTENT, 1):
